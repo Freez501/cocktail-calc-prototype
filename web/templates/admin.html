@@ -1,0 +1,1634 @@
+{% extends "base.html" %}
+
+{% block title %}Админка базы данных — CocktailCalc Pro{% endblock %}
+
+{% block content %}
+<h2>🛠 База данных коктейлей</h2>
+<p class="hint">Логин: <strong>admin</strong>, пароль: <strong>admin</strong>. Перед сохранением автоматически создаётся бэкап.</p>
+
+<div class="admin-tabs">
+    <button class="tab-btn active" onclick="switchTab('cocktails')">Коктейли</button>
+    <button class="tab-btn" onclick="switchTab('pf')">Полуфабрикаты</button>
+    <button class="tab-btn" onclick="switchTab('ingredients')">Ингредиенты</button>
+    <button class="tab-btn" onclick="switchTab('glassware')">Посуда</button>
+</div>
+
+<div id="cocktails-tab" class="tab-panel active">
+    <div class="section-header">
+        <h3>Коктейли</h3>
+        <button class="button secondary" onclick="openCocktailModal()">+ Добавить коктейль</button>
+    </div>
+    <div class="cocktails-toolbar">
+        <select id="cocktailFilter" onchange="setCocktailFilter(this.value)">
+            <option value="all">Все категории</option>
+            <option value="авторский">Авторский</option>
+            <option value="классический">Классический</option>
+            <option value="безалкогольный">Безалкогольный</option>
+        </select>
+        <input type="text" id="cocktailSearch" class="search-input" placeholder="🔍 Поиск коктейля" oninput="setCocktailSearch(this.value)">
+    </div>
+    <div id="cocktailsList" class="admin-list"></div>
+</div>
+
+<div id="pf-tab" class="tab-panel">
+    <div class="section-header">
+        <h3>Полуфабрикаты</h3>
+        <button class="button secondary" onclick="openPfModal()">+ Добавить ПФ</button>
+    </div>
+    <div id="pfList" class="admin-list"></div>
+</div>
+
+<div id="ingredients-tab" class="tab-panel">
+    <div class="section-header">
+        <h3>Ингредиенты</h3>
+        <button class="button secondary" onclick="openIngredientModal()">+ Добавить ингредиент</button>
+    </div>
+    <div id="ingredientsToolbar" class="ingredients-toolbar"></div>
+        <div id="ingredientsTable" class="admin-table-wrapper"></div>
+</div>
+
+<div id="glassware-tab" class="tab-panel">
+    <div class="section-header">
+        <h3>Посуда</h3>
+        <button class="button secondary" onclick="openGlasswareModal()">+ Добавить посуду</button>
+    </div>
+    <div id="glasswareList" class="admin-list"></div>
+</div>
+
+<div class="admin-actions">
+    <button onclick="saveDatabase()">💾 Сохранить базу</button>
+    <button class="button secondary" onclick="createBackup()">Создать бэкап</button>
+    <button class="button secondary" onclick="exportDatabase()">Экспорт</button>
+    <button class="button secondary" onclick="document.getElementById('importFile').click()">Импорт</button>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none;" onchange="importDatabase(this)">
+    <span id="saveStatus" class="save-status"></span>
+</div>
+
+<!-- Модальное окно коктейля -->
+<div id="cocktailModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('cocktailModal')">&times;</span>
+        <h3 id="cocktailModalTitle">Коктейль</h3>
+        <label>Ключ (латиница/транслит):</label>
+        <input type="text" id="cocktailKey" placeholder="mojito">
+        <label>Название:</label>
+        <input type="text" id="cocktailName" placeholder="Мохито">
+        <label>Категория:</label>
+        <select id="cocktailCategory">
+            <option value="авторский">Авторский</option>
+            <option value="классический">Классический</option>
+            <option value="безалкогольный">Безалкогольный</option>
+        </select>
+
+        <h4>Рецепт</h4>
+        <div id="cocktailRecipeRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addRecipeRow('cocktailRecipeRows')">+ Ингредиент</button>
+
+        <h4>Украшения</h4>
+        <div id="cocktailDecorRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addDecorRow('cocktailDecorRows')">+ Украшение</button>
+
+        <h4>Лёд</h4>
+        <div id="cocktailIceRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addIceRow('cocktailIceRows')">+ Лёд</button>
+
+        <h4>Посуда</h4>
+        <div id="cocktailGlassRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addGlassRow('cocktailGlassRows')">+ Посуда</button>
+
+        <div class="modal-actions">
+            <button onclick="saveCocktail()">Сохранить</button>
+            <button class="button secondary" onclick="closeModal('cocktailModal')">Отмена</button>
+            <button class="button danger" onclick="deleteCocktail()">Удалить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно ПФ -->
+<div id="pfModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('pfModal')">&times;</span>
+        <h3 id="pfModalTitle">Полуфабрикат</h3>
+        <label>Ключ:</label>
+        <input type="text" id="pfKey" placeholder="sakharnyi_sirop">
+        <label>Название:</label>
+        <input type="text" id="pfName" placeholder="(ПФ) Сахарный сироп" onblur="this.value = normalizePfName(this.value)">
+        <label>Выход:</label>
+        <input type="number" id="pfOutput" step="0.01" value="1">
+        <label>Единица измерения:</label>
+        <select id="pfUnit">
+            <option value="л">л</option>
+            <option value="кг">кг</option>
+            <option value="шт">шт</option>
+        </select>
+
+        <h4>Рецепт ПФ</h4>
+        <div id="pfRecipeRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addRecipeRow('pfRecipeRows')">+ Ингредиент</button>
+
+        <div class="modal-actions">
+            <button onclick="savePf()">Сохранить</button>
+            <button class="button secondary" onclick="closeModal('pfModal')">Отмена</button>
+            <button class="button danger" onclick="deletePf()">Удалить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно ингредиента -->
+<div id="ingredientModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('ingredientModal')">&times;</span>
+        <h3 id="ingredientModalTitle">Ингредиент</h3>
+        <label>Ключ (как в рецептах):</label>
+        <input type="text" id="ingredientKey" placeholder="ром белый">
+        <input type="hidden" id="ingredientOldKey">
+        <label>Отображаемое имя:</label>
+        <input type="text" id="ingredientDisplayName" placeholder="Ром белый">
+        <label>Категория:</label>
+        <select id="ingredientCategory">
+            <option value="алкоголь">Алкоголь</option>
+            <option value="безалкогольное">Безалкогольное</option>
+            <option value="сироп">Сироп</option>
+            <option value="пюре">Пюре</option>
+            <option value="концентрат">Концентрат</option>
+            <option value="сухой_гр">Сухой (гр)</option>
+            <option value="лёд_кубик">Лёд кубиковый</option>
+            <option value="лёд_фигурный">Лёд фигурный</option>
+            <option value="украшение_шт">Украшение (шт)</option>
+            <option value="украшение_гр">Украшение (гр)</option>
+            <option value="посуда">Посуда</option>
+        </select>
+        <label>Единица измерения:</label>
+        <select id="ingredientUnit">
+            <option value="л">л</option>
+            <option value="кг">кг</option>
+            <option value="шт">шт</option>
+        </select>
+        <label>Объём бутылки (л) / вес (кг) / штук в упаковке:</label>
+        <input type="number" id="ingredientVolume" step="0.01" value="0.7">
+        <label>Цена (₽):</label>
+        <input type="number" id="ingredientPrice" step="1" value="0">
+
+        <div class="modal-actions">
+            <button onclick="saveIngredient()">Сохранить</button>
+            <button class="button secondary" onclick="closeModal('ingredientModal')">Отмена</button>
+            <button class="button danger" onclick="deleteIngredient()">Удалить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно посуды -->
+<div id="glasswareModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('glasswareModal')">&times;</span>
+        <h3 id="glasswareModalTitle">Посуда</h3>
+        <label>Ключ (как в рецептах):</label>
+        <input type="text" id="glasswareKey" placeholder="винный бокал">
+        <input type="hidden" id="glasswareOldKey">
+        <label>Отображаемое имя:</label>
+        <input type="text" id="glasswareDisplayName" placeholder="Винный бокал">
+        <div class="modal-actions">
+            <button onclick="saveGlassware()">Сохранить</button>
+            <button class="button secondary" onclick="closeModal('glasswareModal')">Отмена</button>
+            <button class="button danger" onclick="deleteGlassware()">Удалить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно категорий -->
+<div id="categoryModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('categoryModal')">&times;</span>
+        <h3>Категории ингредиентов</h3>
+        <div id="categoryRows" class="kv-rows"></div>
+        <button type="button" class="button secondary small" onclick="addCategoryRow()">+ Добавить категорию</button>
+        <div class="modal-actions">
+            <button onclick="saveCategories()">Сохранить</button>
+            <button class="button secondary" onclick="closeModal('categoryModal')">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно рецепта ПФ -->
+<div id="pfRecipeModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal('pfRecipeModal')">&times;</span>
+        <h3 id="pfRecipeModalTitle">Рецепт ПФ</h3>
+        <div id="pfRecipeModalBody"></div>
+        <div class="modal-actions">
+            <button class="button secondary" onclick="closeModal('pfRecipeModal')">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<datalist id="allItemsList"></datalist>
+<datalist id="glasswareListData"></datalist>
+
+<style>
+    .admin-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #d8c9b0;
+        padding-bottom: 12px;
+    }
+    .tab-btn {
+        background: #f0e5d1;
+        color: #601203;
+        border: 1px solid #d8c9b0;
+        border-radius: 20px;
+        padding: 10px 24px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .tab-btn.active, .tab-btn:hover {
+        background: #601203;
+        color: #f0e5d1;
+        border-color: #601203;
+    }
+    .tab-panel {
+        display: none;
+    }
+    .tab-panel.active {
+        display: block;
+    }
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .section-header h3 {
+        margin: 0;
+    }
+    .admin-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+    .admin-card {
+        background: #f7f1e6;
+        border: 1px solid #d8c9b0;
+        border-radius: 12px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .admin-card:hover {
+        border-color: #601203;
+        box-shadow: 0 2px 8px rgba(96, 18, 3, 0.12);
+    }
+    .admin-card h4 {
+        margin: 0 0 8px;
+        color: #601203;
+    }
+    .admin-card small {
+        color: #8a6b55;
+    }
+    .admin-actions {
+        position: sticky;
+        bottom: 0;
+        background: #fffdf8;
+        padding: 16px 0;
+        margin-top: 28px;
+        border-top: 1px solid #d8c9b0;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        z-index: 50;
+    }
+    .save-status {
+        color: #601203;
+        font-weight: 500;
+    }
+    .button.small {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+    .button.danger {
+        background: #c53030;
+        border-color: #c53030;
+        color: #fff;
+    }
+    .button.danger:hover {
+        background: #fff;
+        color: #c53030;
+    }
+
+    /* Modal */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background: rgba(96, 18, 3, 0.4);
+        padding: 40px 20px;
+    }
+    .modal.active {
+        display: block;
+    }
+    .modal-content {
+        background: #fffdf8;
+        margin: 0 auto;
+        max-width: 600px;
+        border-radius: 16px;
+        padding: 28px;
+        border: 1px solid #d8c9b0;
+        position: relative;
+    }
+    .modal-close {
+        position: absolute;
+        right: 20px;
+        top: 16px;
+        font-size: 1.8rem;
+        cursor: pointer;
+        color: #601203;
+    }
+    .modal-content label {
+        display: block;
+        margin: 14px 0 6px;
+        font-weight: 600;
+    }
+    .modal-content input, .modal-content select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #c9b89e;
+        border-radius: 8px;
+        background: #f7f1e6;
+        color: #601203;
+        font-family: inherit;
+    }
+    .modal-content input:focus, .modal-content select:focus {
+        outline: none;
+        border-color: #601203;
+    }
+    .modal-content h4 {
+        margin-top: 24px;
+        margin-bottom: 10px;
+        color: #601203;
+    }
+    .kv-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .kv-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .kv-row input {
+        flex: 1;
+    }
+    .kv-row input.kv-key {
+        flex: 2 1 200px;
+        min-width: 160px;
+    }
+    .kv-row input.kv-value {
+        flex: 0 0 80px;
+        min-width: 60px;
+    }
+    .kv-row select.kv-unit {
+        flex: 0 0 90px;
+        min-width: 70px;
+    }
+    .kv-row button {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        margin: 0;
+    }
+    .autocomplete-wrapper.has-pf-view .kv-key {
+        padding-right: 36px;
+    }
+    .pf-view-inline {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        margin: 0;
+        border: none;
+        background: transparent;
+        color: #601203;
+        font-size: 0.95rem;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+        transition: background 0.15s ease;
+    }
+    .pf-view-inline:hover {
+        background: rgba(96, 18, 3, 0.10);
+    }
+    .modal-actions {
+        margin-top: 28px;
+        display: flex;
+        gap: 12px;
+    }
+
+    /* Table */
+    .admin-table-wrapper {
+        overflow-x: auto;
+    }
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .admin-table th, .admin-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e6d8c0;
+    }
+    .admin-table th {
+        background: #f0e5d1;
+        color: #601203;
+        font-weight: 600;
+    }
+    .admin-table tr:hover {
+        background: #f7f1e6;
+        cursor: pointer;
+    }
+    .admin-table tr.unused-row {
+        background: #fff0f0;
+    }
+    .admin-table tr.unused-row td:first-child {
+        position: relative;
+        padding-left: 24px;
+    }
+    .admin-table tr.unused-row td:first-child::before {
+        content: '⚠';
+        position: absolute;
+        left: 8px;
+        color: #c53030;
+    }
+    .row-actions {
+        display: flex;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .row-actions button {
+        padding: 4px 10px;
+        font-size: 0.85rem;
+    }
+
+    .ingredients-toolbar,
+    .cocktails-toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .ingredients-toolbar .button,
+    .ingredients-toolbar button {
+        margin-top: 0;
+        margin-right: 0;
+    }
+    .ingredients-toolbar select,
+    .ingredients-toolbar .button.small,
+    .ingredients-toolbar button.small,
+    .ingredients-toolbar .search-input {
+        height: 38px;
+        line-height: 1.2;
+        box-sizing: border-box;
+    }
+    .ingredients-toolbar select,
+    .cocktails-toolbar select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: #f0e5d1;
+        color: #601203;
+        border: 1px solid #601203;
+        border-radius: 30px;
+        padding: 8px 36px 8px 16px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        min-width: 160px;
+        cursor: pointer;
+        margin-top: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23601203' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+    }
+    .ingredients-toolbar select:hover,
+    .cocktails-toolbar select:hover {
+        background-color: #601203;
+        color: #f0e5d1;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+    }
+    .ingredients-toolbar select:focus,
+    .cocktails-toolbar select:focus {
+        outline: none;
+    }
+    .ingredients-toolbar .search-input,
+    .cocktails-toolbar .search-input {
+        background: #f7f1e6;
+        color: #601203;
+        border: 1px solid #d8c9b0;
+        border-radius: 30px;
+        padding: 8px 16px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        min-width: 180px;
+    }
+    .ingredients-toolbar .search-input:focus,
+    .cocktails-toolbar .search-input:focus {
+        outline: none;
+        border-color: #601203;
+    }
+
+    /* Autocomplete dropdown */
+    .autocomplete-wrapper {
+        position: relative;
+        flex: 2 1 200px;
+        min-width: 160px;
+    }
+    .autocomplete-wrapper input {
+        width: 100%;
+    }
+    .autocomplete-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #fffdf8;
+        border: 1px solid #c9b89e;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        z-index: 200;
+        display: none;
+        box-shadow: 0 4px 12px rgba(96, 18, 3, 0.15);
+    }
+    .autocomplete-dropdown.active {
+        display: block;
+    }
+    .autocomplete-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0e5d1;
+        color: #601203;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover, .autocomplete-item.active {
+        background: #f0e5d1;
+    }
+    .autocomplete-item small {
+        display: block;
+        color: #8a6b55;
+        font-size: 0.85rem;
+    }
+</style>
+
+<script>
+    let database = {};
+    let allItems = [];
+    let glasswareItems = [];
+    let iceItems = [];
+    let currentSemiProducts = [];
+    let currentCocktailKey = null;
+    let currentPfKey = null;
+    let currentIngredientKey = null;
+    let currentGlasswareKey = null;
+
+    const CATEGORY_OPTIONS = {
+        "авторский": "Авторский",
+        "классический": "Классический",
+        "безалкогольный": "Безалкогольный",
+    };
+
+    const CATEGORY_NAME_MAP = {
+        "алкоголь": "Алкоголь",
+        "безалкогольное": "Безалкогольное",
+        "сироп": "Сироп",
+        "пюре": "Пюре",
+        "концентрат": "Концентрат",
+        "сухой_гр": "Сухой (гр)",
+        "лёд_кубик": "Лёд кубиковый",
+        "лёд_фигурный": "Лёд фигурный",
+        "украшение_шт": "Украшение (шт)",
+        "украшение_гр": "Украшение (гр)",
+        "посуда": "Посуда",
+    };
+
+    let isDirty = false;
+
+    function markDirty() {
+        isDirty = true;
+        try {
+            localStorage.setItem('admin_draft', JSON.stringify(database));
+        } catch (e) {}
+    }
+
+    function loadDraft() {
+        try {
+            const draft = localStorage.getItem('admin_draft');
+            if (!draft) return false;
+            const parsed = JSON.parse(draft);
+            if (JSON.stringify(parsed) !== JSON.stringify(database)) {
+                if (confirm('Найден несохранённый черновик. Восстановить?')) {
+                    database = parsed;
+                    return true;
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+        if (isDirty) {
+            e.preventDefault();
+            e.returnValue = 'Есть несохранённые изменения. Уйти со страницы?';
+        }
+    });
+
+    function normalizePfName(name) {
+        name = name.trim();
+        if (!name) return name;
+        return '(ПФ) ' + name.replace(/^\(ПФ\)\s*/, '');
+    }
+
+    let currentCategoryFilter = 'all';
+    let currentSortMode = 'name_asc';
+    let currentIngredientSearch = '';
+
+    function getCategoryDisplayName(category) {
+        return database.category_names?.[category] || CATEGORY_NAME_MAP[category] || category;
+    }
+
+    function getCategoryOptions() {
+        const options = {};
+        for (let [key, label] of Object.entries(database.category_names || CATEGORY_NAME_MAP)) {
+            options[key] = label;
+        }
+        for (let key of Object.keys(database.categories || {})) {
+            const cat = database.categories[key];
+            if (!options[cat]) options[cat] = getCategoryDisplayName(cat);
+        }
+        return options;
+    }
+
+    function buildIngredientCategorySelect() {
+        const select = document.getElementById('ingredientCategory');
+        if (!select) return;
+        const currentValue = select.value;
+        const options = getCategoryOptions();
+        select.innerHTML = Object.entries(options)
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([key, label]) => `<option value="${escapeHtml(key)}"${key === currentValue ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+            .join('');
+    }
+
+    async function loadDatabase() {
+        const res = await fetch('/admin/api/db');
+        database = await res.json();
+        const [pfRes, gwRes] = await Promise.all([
+            fetch('/admin/api/semi-products'),
+            fetch('/admin/api/glassware'),
+        ]);
+        currentSemiProducts = await pfRes.json();
+        glasswareItems = await gwRes.json();
+        const draftLoaded = loadDraft();
+        buildItemList();
+        buildGlasswareList(glasswareItems);
+        buildIceItems();
+        renderCocktails();
+        renderPf();
+        renderIngredients();
+        renderGlassware();
+        if (draftLoaded) showStatus('Восстановлен черновик. Нажмите «Сохранить базу», чтобы записать.');
+    }
+
+    function buildIceItems() {
+        iceItems = getIngredientsList()
+            .filter(i => i.category === 'лёд_кубик' || i.category === 'лёд_фигурный')
+            .map(i => ({ key: i.key, label: i.display_name || i.key }));
+    }
+
+    function getIngredientsList() {
+        const keys = new Set([
+            ...Object.keys(database.categories || {}),
+            ...Object.keys(database.prices || {}),
+            ...Object.keys(database.bottle_volumes || {}),
+        ]);
+        return Array.from(keys).sort().map(key => {
+            const info = database.ingredient_info?.[key] || {};
+            return {
+                key,
+                display_name: info.display_name || key,
+                unit: info.unit || getUnit(key),
+                category: database.categories[key] || '',
+                volume: database.bottle_volumes[key] || 0,
+                price: database.prices[key] || 0,
+            };
+        });
+    }
+
+    function getUsedKeys() {
+        const used = new Set();
+        function scanRecipe(recipe) {
+            if (!recipe) return;
+            for (let key of Object.keys(recipe)) {
+                used.add(key);
+                const pfKey = key.replace(/^\(ПФ\) /, '');
+                if (pfKey !== key) used.add(pfKey);
+            }
+        }
+        function scanCocktail(cocktail) {
+            scanRecipe(cocktail.recipe);
+            scanRecipe(cocktail.decorations);
+            scanRecipe(cocktail.glassware);
+        }
+        for (let cocktail of Object.values(database.cocktails || {})) scanCocktail(cocktail);
+        for (let pf of Object.values(database.semi_products || {})) scanRecipe(pf.recipe);
+        return used;
+    }
+
+    function buildItemList() {
+        allItems = [];
+        for (let ing of getIngredientsList().filter(i => i.category !== 'посуда')) {
+            allItems.push({ key: ing.key, label: ing.display_name || ing.key });
+        }
+        for (let pf of currentSemiProducts) {
+            allItems.push({ key: `(ПФ) ${pf.key}`, label: pf.name });
+        }
+        const datalist = document.getElementById('allItemsList');
+        datalist.innerHTML = allItems.map(i => `<option value="${escapeHtml(i.key)}">${escapeHtml(i.label)}</option>`).join('');
+    }
+
+    function buildGlasswareList(items) {
+        const datalist = document.getElementById('glasswareListData');
+        datalist.innerHTML = items.map(i => `<option value="${escapeHtml(i.key)}">${escapeHtml(i.display_name || i.key)}</option>`).join('');
+    }
+
+    function _renderAutocomplete(input, items) {
+        const dropdown = input.parentElement.querySelector('.autocomplete-dropdown');
+        if (!items.length) {
+            dropdown.innerHTML = '<div class="autocomplete-item">Нет совпадений</div>';
+            dropdown.classList.add('active');
+            input.dataset.activeIndex = '-1';
+            return;
+        }
+        dropdown.innerHTML = items.map((item, idx) => `
+            <div class="autocomplete-item" data-key="${escapeHtml(item.key)}" data-index="${idx}">
+                ${escapeHtml(item.label)}
+                <small>${escapeHtml(item.key)}</small>
+            </div>
+        `).join('');
+        dropdown.classList.add('active');
+        input.dataset.activeIndex = '-1';
+    }
+
+    function _filterAutocomplete(input) {
+        const query = input.value.trim().toLowerCase();
+        const items = input._autocompleteItems || allItems;
+        const filtered = items.filter(item =>
+            item.label.toLowerCase().includes(query) ||
+            item.key.toLowerCase().includes(query)
+        );
+        _renderAutocomplete(input, filtered);
+    }
+
+    function _selectAutocompleteItem(input, key, onSelect) {
+        input.value = key;
+        const dropdown = input.parentElement.querySelector('.autocomplete-dropdown');
+        dropdown.classList.remove('active');
+        input.dataset.activeIndex = '-1';
+        if (onSelect) onSelect();
+    }
+
+    function _setActiveAutocompleteItem(input, index) {
+        const dropdown = input.parentElement.querySelector('.autocomplete-dropdown');
+        const items = dropdown.querySelectorAll('.autocomplete-item[data-key]');
+        items.forEach(el => el.classList.remove('active'));
+        if (index >= 0 && index < items.length) {
+            items[index].classList.add('active');
+            items[index].scrollIntoView({ block: 'nearest' });
+        }
+        input.dataset.activeIndex = String(index);
+    }
+
+    function setupAutocomplete(input, dropdown, onSelect, items = null) {
+        input._autocompleteItems = items;
+        input.addEventListener('focus', () => _filterAutocomplete(input));
+        input.addEventListener('input', () => _filterAutocomplete(input));
+        input.addEventListener('blur', () => {
+            setTimeout(() => dropdown.classList.remove('active'), 200);
+        });
+        input.addEventListener('keydown', (e) => {
+            if (!dropdown.classList.contains('active')) return;
+            const items = dropdown.querySelectorAll('.autocomplete-item[data-key]');
+            let activeIndex = parseInt(input.dataset.activeIndex || '-1');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, items.length - 1);
+                _setActiveAutocompleteItem(input, activeIndex);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, -1);
+                _setActiveAutocompleteItem(input, activeIndex);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeIndex >= 0 && items[activeIndex]) {
+                    _selectAutocompleteItem(input, items[activeIndex].dataset.key, onSelect);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('active');
+                input.dataset.activeIndex = '-1';
+            }
+        });
+        dropdown.addEventListener('mousedown', (e) => {
+            const item = e.target.closest('.autocomplete-item[data-key]');
+            if (item) {
+                _selectAutocompleteItem(input, item.dataset.key, onSelect);
+            }
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function getDisplayName(key) {
+        const info = database.ingredient_info?.[key];
+        return info?.display_name || key;
+    }
+
+    function getUnit(key) {
+        const info = database.ingredient_info?.[key];
+        if (info?.unit) return info.unit;
+        const category = database.categories?.[key] || '';
+        const unitMap = {
+            "алкоголь": "л", "безалкогольное": "л", "сироп": "л", "пюре": "л", "концентрат": "л",
+            "сухой_гр": "кг", "лёд_кубик": "кг", "лёд_фигурный": "шт",
+            "украшение_шт": "шт", "украшение_гр": "гр", "посуда": "шт"
+        };
+        return unitMap[category] || "л";
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+        document.getElementById(`${tab}-tab`).classList.add('active');
+    }
+
+    // ─── Коктейли ───────────────────────────────────────────────────────────
+    let currentCocktailFilter = 'all';
+    let currentCocktailSearch = '';
+
+    function setCocktailFilter(value) {
+        currentCocktailFilter = value;
+        renderCocktails();
+    }
+
+    function setCocktailSearch(value) {
+        currentCocktailSearch = value;
+        renderCocktails();
+    }
+
+    function renderCocktails() {
+        const list = document.getElementById('cocktailsList');
+        list.innerHTML = '';
+        const query = currentCocktailSearch.trim().toLowerCase();
+        for (let [key, cocktail] of Object.entries(database.cocktails || {})) {
+            if (currentCocktailFilter !== 'all' && cocktail.category !== currentCocktailFilter) continue;
+            if (query && !(cocktail.name || '').toLowerCase().includes(query) && !key.toLowerCase().includes(query)) continue;
+            const card = document.createElement('div');
+            card.className = 'admin-card';
+            const ings = Object.keys(cocktail.recipe || {}).join(', ');
+            const cat = cocktail.category ? ` — ${CATEGORY_OPTIONS[cocktail.category] || cocktail.category}` : '';
+            card.innerHTML = `
+                <h4>${cocktail.name}</h4>
+                <small>${ings}${cat}</small>
+            `;
+            card.onclick = () => openCocktailModal(key);
+            list.appendChild(card);
+        }
+    }
+
+    function openCocktailModal(key = null) {
+        currentCocktailKey = key;
+        const cocktail = key ? database.cocktails[key] : { name: '', category: '', recipe: {}, decorations: {}, glassware: {} };
+        document.getElementById('cocktailModalTitle').textContent = key ? 'Редактировать коктейль' : 'Новый коктейль';
+        document.getElementById('cocktailKey').value = key || '';
+        document.getElementById('cocktailKey').disabled = !!key;
+        document.getElementById('cocktailName').value = cocktail.name || '';
+        document.getElementById('cocktailCategory').value = cocktail.category || 'авторский';
+        const iceKeys = new Set(iceItems.map(i => i.key));
+        const recipeWithoutIce = {};
+        const iceRecipe = {};
+        for (let [k, v] of Object.entries(cocktail.recipe || {})) {
+            if (iceKeys.has(k)) iceRecipe[k] = v;
+            else recipeWithoutIce[k] = v;
+        }
+        fillKvRows('cocktailRecipeRows', recipeWithoutIce);
+        fillKvRows('cocktailIceRows', iceRecipe);
+        fillKvRows('cocktailDecorRows', cocktail.decorations || {});
+        fillKvRows('cocktailGlassRows', cocktail.glassware || {});
+        document.getElementById('cocktailModal').classList.add('active');
+    }
+
+    function saveCocktail() {
+        const key = document.getElementById('cocktailKey').value.trim().toLowerCase();
+        const name = document.getElementById('cocktailName').value.trim();
+        const category = document.getElementById('cocktailCategory').value;
+        if (!key || !name) {
+            alert('Заполните ключ и название');
+            return;
+        }
+        if (key !== currentCocktailKey && database.cocktails?.[key]) {
+            alert('Коктейль с таким ключом уже существует');
+            return;
+        }
+        const recipe = readKvRows('cocktailRecipeRows');
+        const ice = readKvRows('cocktailIceRows');
+        const decorations = readKvRows('cocktailDecorRows');
+        const glassware = readKvRows('cocktailGlassRows');
+        const allRows = {...recipe, ...ice, ...decorations, ...glassware};
+        for (let [k, v] of Object.entries(allRows)) {
+            if (v < 0) {
+                alert(`Отрицательное количество у ингредиента «${k}»`);
+                return;
+            }
+        }
+        if (!database.cocktails) database.cocktails = {};
+        database.cocktails[key] = {
+            name: name,
+            category: category,
+            recipe: {...recipe, ...ice},
+            decorations: decorations,
+            glassware: glassware,
+        };
+        currentCocktailKey = key;
+        markDirty();
+        renderCocktails();
+        closeModal('cocktailModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    function deleteCocktail() {
+        if (!currentCocktailKey) return;
+        if (!confirm('Удалить коктейль?')) return;
+        delete database.cocktails[currentCocktailKey];
+        markDirty();
+        renderCocktails();
+        closeModal('cocktailModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    // ─── ПФ ─────────────────────────────────────────────────────────────────
+    function renderPf() {
+        const list = document.getElementById('pfList');
+        list.innerHTML = '';
+        for (let [key, pf] of Object.entries(database.semi_products || {})) {
+            const card = document.createElement('div');
+            card.className = 'admin-card';
+            const ings = Object.keys(pf.recipe || {}).join(', ');
+            const unit = pf.unit || 'л';
+            card.innerHTML = `
+                <h4>${pf.name}</h4>
+                <small>Выход: ${pf.output_volume} ${unit} — ${ings}</small>
+            `;
+            card.onclick = () => openPfModal(key);
+            list.appendChild(card);
+        }
+    }
+
+    function openPfModal(key = null) {
+        currentPfKey = key;
+        const pf = key ? database.semi_products[key] : { name: '', output_volume: 1, unit: 'л', recipe: {} };
+        document.getElementById('pfModalTitle').textContent = key ? 'Редактировать ПФ' : 'Новый ПФ';
+        document.getElementById('pfKey').value = key || '';
+        document.getElementById('pfKey').disabled = !!key;
+        document.getElementById('pfName').value = normalizePfName(pf.name || '');
+        document.getElementById('pfOutput').value = pf.output_volume || 1;
+        document.getElementById('pfUnit').value = pf.unit || 'л';
+        fillKvRows('pfRecipeRows', pf.recipe || {});
+        document.getElementById('pfModal').classList.add('active');
+    }
+
+    function savePf() {
+        const key = document.getElementById('pfKey').value.trim().toLowerCase();
+        const name = normalizePfName(document.getElementById('pfName').value);
+        const output = parseFloat(document.getElementById('pfOutput').value) || 1;
+        const unit = document.getElementById('pfUnit').value;
+        if (!key || !name) {
+            alert('Заполните ключ и название');
+            return;
+        }
+        if (key !== currentPfKey && database.semi_products?.[key]) {
+            alert('ПФ с таким ключом уже существует');
+            return;
+        }
+        if (output < 0) {
+            alert('Выход не может быть отрицательным');
+            return;
+        }
+        const recipe = readKvRows('pfRecipeRows');
+        for (let [k, v] of Object.entries(recipe)) {
+            if (v < 0) {
+                alert(`Отрицательное количество у ингредиента «${k}»`);
+                return;
+            }
+        }
+        if (!database.semi_products) database.semi_products = {};
+        database.semi_products[key] = {
+            name: name,
+            output_volume: output,
+            unit: unit,
+            recipe: recipe,
+        };
+        currentPfKey = key;
+        markDirty();
+        renderPf();
+        closeModal('pfModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    function deletePf() {
+        if (!currentPfKey) return;
+        if (!confirm('Удалить ПФ?')) return;
+        delete database.semi_products[currentPfKey];
+        markDirty();
+        renderPf();
+        closeModal('pfModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    // ─── Ингредиенты ─────────────────────────────────────────────────────────
+    function renderIngredients(ingredientsData) {
+        renderIngredientsToolbar();
+        renderIngredientsTable(ingredientsData);
+    }
+
+    function renderIngredientsToolbar() {
+        const toolbar = document.getElementById('ingredientsToolbar');
+        const categories = getCategoryOptions();
+        const filterOptions = Object.entries(categories)
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([key, label]) => `<option value="${escapeHtml(key)}"${key === currentCategoryFilter ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+            .join('');
+
+        toolbar.innerHTML = `
+            <select id="ingredientFilter" onchange="setCategoryFilter(this.value)">
+                <option value="all"${currentCategoryFilter === 'all' ? ' selected' : ''}>Все категории</option>
+                ${filterOptions}
+            </select>
+            <select id="ingredientSort" onchange="setIngredientSort(this.value)">
+                <option value="name_asc"${currentSortMode === 'name_asc' ? ' selected' : ''}>А → Я</option>
+                <option value="name_desc"${currentSortMode === 'name_desc' ? ' selected' : ''}>Я → А</option>
+                <option value="price_asc"${currentSortMode === 'price_asc' ? ' selected' : ''}>Цена ↑</option>
+                <option value="price_desc"${currentSortMode === 'price_desc' ? ' selected' : ''}>Цена ↓</option>
+            </select>
+            <button class="button secondary small" onclick="openCategoryModal()">⚙ Категории</button>
+            <input type="text" id="ingredientSearch" class="search-input" placeholder="🔍 Поиск ингредиента" value="${escapeHtml(currentIngredientSearch)}" oninput="setIngredientSearch(this.value)">
+        `;
+    }
+
+    function renderIngredientsTable(ingredientsData) {
+        const tableWrapper = document.getElementById('ingredientsTable');
+        let rows = (ingredientsData || getIngredientsList()).filter(r => r.category !== 'посуда');
+
+        if (currentCategoryFilter !== 'all') {
+            rows = rows.filter(r => r.category === currentCategoryFilter);
+        }
+
+        if (currentIngredientSearch.trim()) {
+            const query = currentIngredientSearch.trim().toLowerCase();
+            rows = rows.filter(r =>
+                (r.display_name || r.key).toLowerCase().includes(query) ||
+                r.key.toLowerCase().includes(query)
+            );
+        }
+
+        rows.sort((a, b) => {
+            if (currentSortMode === 'name_asc') return (a.display_name || a.key).localeCompare(b.display_name || b.key);
+            if (currentSortMode === 'name_desc') return (b.display_name || b.key).localeCompare(a.display_name || a.key);
+            if (currentSortMode === 'price_asc') return a.price - b.price;
+            if (currentSortMode === 'price_desc') return b.price - a.price;
+            return 0;
+        });
+
+        const usedKeys = getUsedKeys();
+        tableWrapper.innerHTML = `
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Ингредиент</th>
+                        <th>Категория</th>
+                        <th>Ед. изм.</th>
+                        <th>Объём/упаковка</th>
+                        <th>Цена (₽)</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr class="${usedKeys.has(r.key) ? '' : 'unused-row'}">
+                            <td>${escapeHtml(r.display_name || r.key)}</td>
+                            <td>${escapeHtml(getCategoryDisplayName(r.category))}</td>
+                            <td>${r.unit}</td>
+                            <td>${r.volume}</td>
+                            <td>${r.price}</td>
+                            <td class="row-actions">
+                                <button class="button secondary small" onclick="openIngredientModal('${r.key.replace(/'/g, "\\'")}')">✏️</button>
+                                <button class="button danger small" onclick="deleteIngredientByKey('${r.key.replace(/'/g, "\\'")}')">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function setCategoryFilter(value) {
+        currentCategoryFilter = value;
+        renderIngredients();
+    }
+
+    function setIngredientSort(value) {
+        currentSortMode = value;
+        renderIngredients();
+    }
+
+    function setIngredientSearch(value) {
+        currentIngredientSearch = value;
+        renderIngredientsTable();
+    }
+
+    function deleteIngredientByKey(key) {
+        if (!confirm('Удалить ингредиент?')) return;
+        delete database.categories[key];
+        delete database.bottle_volumes[key];
+        delete database.prices[key];
+        if (database.ingredient_info) delete database.ingredient_info[key];
+        markDirty();
+        buildItemList();
+        buildIceItems();
+        renderIngredients();
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    // ─── Управление категориями ─────────────────────────────────────────────
+    function openCategoryModal() {
+        const container = document.getElementById('categoryRows');
+        container.innerHTML = '';
+        const names = database.category_names || {};
+        for (let [key, label] of Object.entries(names).sort((a, b) => a[1].localeCompare(b[1]))) {
+            addCategoryRow(key, label);
+        }
+        if (!Object.keys(names).length) addCategoryRow();
+        document.getElementById('categoryModal').classList.add('active');
+    }
+
+    function addCategoryRow(key = '', label = '') {
+        const container = document.getElementById('categoryRows');
+        const row = document.createElement('div');
+        row.className = 'kv-row';
+        row.innerHTML = `
+            <input type="text" class="cat-key" placeholder="код (латиницей)" value="${escapeHtml(key)}">
+            <input type="text" class="cat-label" placeholder="название" value="${escapeHtml(label)}">
+            <button type="button" class="button danger small" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function saveCategories() {
+        const newNames = {};
+        const rows = document.querySelectorAll('#categoryRows .kv-row');
+        for (let row of rows) {
+            const key = row.querySelector('.cat-key').value.trim().toLowerCase();
+            const label = row.querySelector('.cat-label').value.trim();
+            if (key && label) newNames[key] = label;
+        }
+        database.category_names = newNames;
+        markDirty();
+        buildIngredientCategorySelect();
+        renderIngredients();
+        closeModal('categoryModal');
+        showStatus('Категории обновлены. Нажмите «Сохранить базу»');
+    }
+
+    function openIngredientModal(key = null) {
+        currentIngredientKey = key;
+        buildIngredientCategorySelect();
+        document.getElementById('ingredientModalTitle').textContent = key ? 'Редактировать ингредиент' : 'Новый ингредиент';
+        document.getElementById('ingredientKey').value = key || '';
+        document.getElementById('ingredientOldKey').value = key || '';
+        document.getElementById('ingredientKey').disabled = false;
+        document.getElementById('ingredientCategory').value = key ? (database.categories[key] || 'алкоголь') : 'алкоголь';
+        document.getElementById('ingredientVolume').value = key ? (database.bottle_volumes[key] ?? 0.7) : 0.7;
+        document.getElementById('ingredientPrice').value = key ? (database.prices[key] ?? 0) : 0;
+        const info = key ? (database.ingredient_info?.[key] || {}) : {};
+        document.getElementById('ingredientDisplayName').value = info.display_name || (key ? '' : '');
+        document.getElementById('ingredientUnit').value = info.unit || (key ? getUnit(key) : 'л');
+        document.getElementById('ingredientModal').classList.add('active');
+    }
+
+    async function saveIngredient() {
+        const oldKey = document.getElementById('ingredientOldKey').value.trim().toLowerCase();
+        const newKey = document.getElementById('ingredientKey').value.trim().toLowerCase();
+        const displayName = document.getElementById('ingredientDisplayName').value.trim();
+        const category = document.getElementById('ingredientCategory').value;
+        const unit = document.getElementById('ingredientUnit').value;
+        const volume = parseFloat(document.getElementById('ingredientVolume').value) || 0;
+        const price = parseInt(document.getElementById('ingredientPrice').value) || 0;
+
+        if (!newKey) {
+            alert('Введите ключ ингредиента');
+            return;
+        }
+
+        if (!oldKey && database.categories?.[newKey]) {
+            alert('Ингредиент с таким ключом уже существует');
+            return;
+        }
+
+        if (volume < 0) {
+            alert('Объём/упаковка не может быть отрицательным');
+            return;
+        }
+        if (price < 0) {
+            alert('Цена не может быть отрицательной');
+            return;
+        }
+
+        if (!oldKey) {
+            if (!database.categories) database.categories = {};
+            if (!database.bottle_volumes) database.bottle_volumes = {};
+            if (!database.prices) database.prices = {};
+            if (!database.ingredient_info) database.ingredient_info = {};
+            database.categories[newKey] = category;
+            database.bottle_volumes[newKey] = volume;
+            database.prices[newKey] = price;
+            database.ingredient_info[newKey] = { display_name: displayName || newKey, unit: unit };
+            markDirty();
+            buildItemList();
+            renderIngredients();
+            closeModal('ingredientModal');
+            showStatus('Ингредиент добавлен. Нажмите «Сохранить базу»');
+            return;
+        }
+
+        const res = await fetch('/admin/api/ingredient/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                old_key: oldKey,
+                new_key: newKey,
+                display_name: displayName,
+                unit: unit,
+                category: category,
+                volume: volume,
+                price: price,
+            }),
+        });
+        const result = await res.json();
+        if (res.ok) {
+            await loadDatabase();
+            closeModal('ingredientModal');
+            showStatus('✅ Ингредиент сохранён. Бэкап: ' + result.backup);
+        } else {
+            showStatus('❌ Ошибка: ' + (result.detail || 'не удалось сохранить'));
+        }
+    }
+
+    function deleteIngredient() {
+        if (!currentIngredientKey) return;
+        if (!confirm('Удалить ингредиент?')) return;
+        delete database.categories[currentIngredientKey];
+        delete database.bottle_volumes[currentIngredientKey];
+        delete database.prices[currentIngredientKey];
+        if (database.ingredient_info) delete database.ingredient_info[currentIngredientKey];
+        markDirty();
+        buildItemList();
+        renderIngredients();
+        closeModal('ingredientModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    // ─── Посуда ─────────────────────────────────────────────────────────────
+    function renderGlassware() {
+        const list = document.getElementById('glasswareList');
+        list.innerHTML = '';
+        const items = glasswareItems || [];
+        for (let item of items) {
+            const card = document.createElement('div');
+            card.className = 'admin-card';
+            card.innerHTML = `
+                <h4>${escapeHtml(item.display_name || item.key)}</h4>
+                <small>${escapeHtml(item.key)}</small>
+            `;
+            card.onclick = () => openGlasswareModal(item.key);
+            list.appendChild(card);
+        }
+    }
+
+    function openGlasswareModal(key = null) {
+        currentGlasswareKey = key;
+        document.getElementById('glasswareModalTitle').textContent = key ? 'Редактировать посуду' : 'Новая посуда';
+        document.getElementById('glasswareKey').value = key || '';
+        document.getElementById('glasswareOldKey').value = key || '';
+        document.getElementById('glasswareKey').disabled = false;
+        const info = key ? (database.ingredient_info?.[key] || {}) : {};
+        document.getElementById('glasswareDisplayName').value = info.display_name || (key ? '' : '');
+        document.getElementById('glasswareModal').classList.add('active');
+    }
+
+    async function saveGlassware() {
+        const oldKey = document.getElementById('glasswareOldKey').value.trim().toLowerCase();
+        const newKey = document.getElementById('glasswareKey').value.trim().toLowerCase();
+        const displayName = document.getElementById('glasswareDisplayName').value.trim();
+
+        if (!newKey) {
+            alert('Введите ключ посуды');
+            return;
+        }
+
+        if (!oldKey && database.categories?.[newKey]) {
+            alert('Посуда/ингредиент с таким ключом уже существует');
+            return;
+        }
+
+        if (!oldKey) {
+            if (!database.categories) database.categories = {};
+            if (!database.bottle_volumes) database.bottle_volumes = {};
+            if (!database.prices) database.prices = {};
+            if (!database.ingredient_info) database.ingredient_info = {};
+            database.categories[newKey] = 'посуда';
+            database.bottle_volumes[newKey] = 0;
+            database.prices[newKey] = 0;
+            database.ingredient_info[newKey] = { display_name: displayName || newKey, unit: 'шт' };
+            glasswareItems.push({ key: newKey, display_name: displayName || newKey });
+            markDirty();
+            buildItemList();
+            buildGlasswareList(glasswareItems);
+            renderGlassware();
+            renderIngredients();
+            closeModal('glasswareModal');
+            showStatus('Посуда добавлена. Нажмите «Сохранить базу»');
+            return;
+        }
+
+        const res = await fetch('/admin/api/ingredient/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                old_key: oldKey,
+                new_key: newKey,
+                display_name: displayName,
+                unit: 'шт',
+                category: 'посуда',
+                volume: 0,
+                price: 0,
+            }),
+        });
+        const result = await res.json();
+        if (res.ok) {
+            await loadDatabase();
+            closeModal('glasswareModal');
+            showStatus('✅ Посуда сохранена. Бэкап: ' + result.backup);
+        } else {
+            showStatus('❌ Ошибка: ' + (result.detail || 'не удалось сохранить'));
+        }
+    }
+
+    function deleteGlassware() {
+        if (!currentGlasswareKey) return;
+        if (!confirm('Удалить посуду?')) return;
+        delete database.categories[currentGlasswareKey];
+        delete database.bottle_volumes[currentGlasswareKey];
+        delete database.prices[currentGlasswareKey];
+        if (database.ingredient_info) delete database.ingredient_info[currentGlasswareKey];
+        glasswareItems = glasswareItems.filter(i => i.key !== currentGlasswareKey);
+        markDirty();
+        buildItemList();
+        buildGlasswareList(glasswareItems);
+        renderGlassware();
+        renderIngredients();
+        closeModal('glasswareModal');
+        showStatus('Изменения не сохранены в файл — нажмите «Сохранить базу»');
+    }
+
+    // ─── Универсальные KV-ряды ───────────────────────────────────────────────
+    function fillKvRows(containerId, obj) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        for (let [key, value] of Object.entries(obj)) {
+            let displayValue = value;
+            let displayUnit = null;
+            if (containerId.includes('Recipe')) {
+                displayUnit = getUnit(key);
+                if (displayUnit === 'л' && value < 0.1) { displayValue = value * 1000; displayUnit = 'мл'; }
+                else if (displayUnit === 'кг' && value < 0.1) { displayValue = value * 1000; displayUnit = 'г'; }
+            }
+            addKvRow(containerId, key, displayValue, displayUnit);
+        }
+    }
+
+    function addKvRow(containerId, key = '', value = '', unit = null, items = null) {
+        const container = document.getElementById(containerId);
+        const row = document.createElement('div');
+        row.className = 'kv-row';
+        const isDecor = containerId.includes('Decor');
+        const isIce = containerId.includes('Ice');
+        const isGlass = containerId.includes('Glass');
+        const isRecipe = containerId.includes('Recipe');
+        const useAutocomplete = isRecipe || isDecor || isIce || (items !== null);
+        const isPf = isRecipe && key.startsWith('(ПФ) ');
+        const pfViewButton = isPf
+            ? `<button type="button" class="pf-view-inline" onclick="showPfRecipe('${escapeHtml(key)}')" title="Посмотреть рецепт ПФ">👁</button>`
+            : '';
+        const keyInput = useAutocomplete
+            ? `<div class="autocomplete-wrapper${isPf ? ' has-pf-view' : ''}">${pfViewButton}<input type="text" class="kv-key" placeholder="${isDecor ? 'украшение' : (isIce ? 'лёд' : 'ингредиент')}" value="${escapeHtml(key)}" autocomplete="off"><div class="autocomplete-dropdown"></div></div>`
+            : (isGlass
+                ? `<input type="text" list="glasswareListData" class="kv-key" placeholder="посуда" value="${escapeHtml(key)}">`
+                : `<input type="text" class="kv-key" placeholder="название" value="${escapeHtml(key)}">`);
+        const unitSelect = (isRecipe || isIce)
+            ? `<select class="kv-unit">${buildUnitOptions(unit || getUnit(key))}</select>`
+            : '';
+        row.innerHTML = `
+            ${keyInput}
+            <input type="text" class="kv-value ${isDecor || isGlass ? '' : 'amount'}" placeholder="${isDecor || isGlass ? 'кол-во' : 'количество'}" value="${value}">
+            ${unitSelect}
+            <button type="button" class="button secondary small" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(row);
+
+        if (useAutocomplete) {
+            const wrapper = row.querySelector('.autocomplete-wrapper');
+            const keyInputEl = wrapper.querySelector('.kv-key');
+            const dropdown = wrapper.querySelector('.autocomplete-dropdown');
+            if (isRecipe || isIce) {
+                const unitSelectEl = row.querySelector('.kv-unit');
+                function updateUnitOptions() {
+                    const baseUnit = getUnit(keyInputEl.value.trim());
+                    const allowed = { 'л': ['л','мл'], 'кг': ['кг','г'], 'шт': ['шт'] }[baseUnit] || ['л','мл','кг','г','шт'];
+                    const current = unitSelectEl.value;
+                    unitSelectEl.innerHTML = allowed.map(u => `<option value="${u}"${u === current ? ' selected' : ''}>${u}</option>`).join('');
+                }
+                setupAutocomplete(keyInputEl, dropdown, updateUnitOptions, items);
+            } else {
+                setupAutocomplete(keyInputEl, dropdown, null, items);
+            }
+        }
+    }
+
+    function buildUnitOptions(selected) {
+        const units = ['л', 'мл', 'кг', 'г', 'шт'];
+        return units.map(u => `<option value="${u}"${u === selected ? ' selected' : ''}>${u}</option>`).join('');
+    }
+
+    function addRecipeRow(containerId) {
+        addKvRow(containerId, '', '', 'л');
+    }
+    function addDecorRow(containerId) {
+        addKvRow(containerId, '', '');
+    }
+    function addGlassRow(containerId) {
+        addKvRow(containerId, '', '');
+    }
+    function addIceRow(containerId) {
+        addKvRow(containerId, '', '', 'шт', iceItems);
+    }
+
+    function showPfRecipe(key) {
+        const pfName = key.replace(/^\(ПФ\) /, '').trim();
+        const pf = database.semi_products?.[pfName];
+        if (!pf) {
+            alert('ПФ не найден в базе');
+            return;
+        }
+        const recipeLines = Object.entries(pf.recipe || {})
+            .map(([ing, amount]) => `<li>${escapeHtml(ing)}: ${amount} л</li>`)
+            .join('');
+        document.getElementById('pfRecipeModalTitle').textContent = 'Рецепт ПФ: ' + (pf.name || pfName);
+        document.getElementById('pfRecipeModalBody').innerHTML = `
+            <p><strong>Выход:</strong> ${pf.output_volume} ${pf.unit || 'л'}</p>
+            <p><strong>Состав:</strong></p>
+            <ul>${recipeLines || '<li>—</li>'}</ul>
+        `;
+        document.getElementById('pfRecipeModal').classList.add('active');
+    }
+
+    function readKvRows(containerId) {
+        const result = {};
+        document.querySelectorAll(`#${containerId} .kv-row`).forEach(row => {
+            const key = row.querySelector('.kv-key').value.trim();
+            let value = parseFloat(row.querySelector('.kv-value').value);
+            const unitSelect = row.querySelector('.kv-unit');
+            if (key && !isNaN(value)) {
+                if (unitSelect) {
+                    const unit = unitSelect.value;
+                    const factor = { 'мл': 0.001, 'г': 0.001 }[unit] || 1;
+                    value = value * factor;
+                }
+                result[key] = value;
+            }
+        });
+        return result;
+    }
+
+    // ─── Сохранение ─────────────────────────────────────────────────────────
+    async function saveDatabase() {
+        const res = await fetch('/admin/api/db', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(database),
+        });
+        const result = await res.json();
+        if (res.ok) {
+            isDirty = false;
+            try { localStorage.removeItem('admin_draft'); } catch (e) {}
+            showStatus('✅ База сохранена. Бэкап: ' + result.backup);
+        } else {
+            showStatus('❌ Ошибка сохранения');
+        }
+    }
+
+    async function createBackup() {
+        const res = await fetch('/admin/api/backup', { method: 'POST' });
+        const result = await res.json();
+        if (res.ok) {
+            showStatus('✅ Бэкап создан: ' + result.backup);
+        } else {
+            showStatus('❌ Ошибка');
+        }
+    }
+
+    function exportDatabase() {
+        const blob = new Blob([JSON.stringify(database, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'cocktails_db.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showStatus('База экспортирована');
+    }
+
+    function importDatabase(input) {
+        const file = input.files[0];
+        if (!file) return;
+        if (!confirm('Импорт заменит текущую базу. Продолжить?')) {
+            input.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                database = data;
+                currentSemiProducts = Object.entries(database.semi_products || {}).map(([key, pf]) => ({ key, ...pf }));
+                glasswareItems = [];
+                for (let [key, category] of Object.entries(database.categories || {})) {
+                    if (category === 'посуда') {
+                        const info = database.ingredient_info?.[key] || {};
+                        glasswareItems.push({ key, display_name: info.display_name || key });
+                    }
+                }
+                markDirty();
+                buildItemList();
+                buildGlasswareList(glasswareItems);
+                buildIceItems();
+                renderCocktails();
+                renderPf();
+                renderIngredients();
+                renderGlassware();
+                showStatus('База импортирована. Нажмите «Сохранить базу», чтобы записать.');
+            } catch (err) {
+                alert('Ошибка импорта: ' + err.message);
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    function showStatus(msg) {
+        document.getElementById('saveStatus').textContent = msg;
+    }
+
+    loadDatabase();
+</script>
+{% endblock %}

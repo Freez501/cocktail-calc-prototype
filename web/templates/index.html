@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Расчёт закупок — CocktailCalc Pro{% endblock %}
+
+{% block content %}
+<h2>Выберите коктейли</h2>
+<p class="hint">Нажмите на карточку или укажите количество. Затем нажмите «Рассчитать».</p>
+
+<form action="/calculate" method="post" id="orderForm">
+    <input type="hidden" name="order" id="order" value="">
+
+    <div class="filter-bar">
+        <select id="categoryFilter" onchange="filterCocktails(this.value)">
+            <option value="all">Все категории</option>
+            <option value="авторский">Авторский</option>
+            <option value="классический">Классический</option>
+            <option value="безалкогольный">Безалкогольный</option>
+        </select>
+    </div>
+
+    <div class="cocktail-grid">
+        {% for key, cocktail in cocktails.items() %}
+        <label class="cocktail-card" data-key="{{ key }}" data-category="{{ cocktail.category }}">
+            <input type="checkbox" class="cocktail-check" data-name="{{ cocktail.name }}" style="display:none;">
+            <span class="cocktail-name">{{ cocktail.name }}</span>
+            <button type="button" class="qty-btn minus" onclick="changeQty(this, -1); event.preventDefault();">−</button>
+            <input type="number" class="cocktail-qty" min="0" value="0" data-name="{{ cocktail.name }}" onchange="updateCard(this)" onclick="event.stopPropagation();">
+            <button type="button" class="qty-btn plus" onclick="changeQty(this, 1); event.preventDefault();">+</button>
+        </label>
+        {% endfor %}
+    </div>
+
+    <button type="submit">Рассчитать</button>
+</form>
+
+<style>
+    .filter-bar {
+            margin-bottom: 16px;
+        }
+        .filter-bar select {
+            appearance: none;
+            -webkit-appearance: none;
+            background: #f0e5d1;
+            color: #601203;
+            border: 1px solid #601203;
+            border-radius: 30px;
+            padding: 8px 36px 8px 16px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            min-width: 160px;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23601203' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+        }
+        .filter-bar select:hover {
+            background-color: #601203;
+            color: #f0e5d1;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+        }
+        .filter-bar select:focus {
+            outline: none;
+        }
+        .cocktail-card.hidden {
+            display: none;
+        }
+        .qty-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #601203;
+        background: #f0e5d1;
+        color: #601203;
+        border-radius: 50%;
+        font-size: 1.1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s, color 0.2s;
+        padding: 0;
+        margin: 0;
+        flex-shrink: 0;
+    }
+    .qty-btn:hover {
+        background: #601203;
+        color: #f0e5d1;
+    }
+</style>
+
+<script>
+    function filterCocktails(category) {
+        document.querySelectorAll('.cocktail-card').forEach(card => {
+            if (category === 'all' || card.dataset.category === category) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+    }
+
+    const orderInput = document.getElementById('order');
+    const form = document.getElementById('orderForm');
+
+    function updateOrder() {
+        const lines = [];
+        document.querySelectorAll('.cocktail-qty').forEach(qty => {
+            const name = qty.dataset.name;
+            const count = parseInt(qty.value) || 0;
+            if (count > 0) lines.push(`${name} ${count}`);
+        });
+        orderInput.value = lines.join(', ');
+    }
+
+    function updateCard(qty) {
+        const card = qty.closest('.cocktail-card');
+        const check = card.querySelector('.cocktail-check');
+        const count = parseInt(qty.value) || 0;
+        check.checked = count > 0;
+        if (count > 0) card.classList.add('selected');
+        else card.classList.remove('selected');
+        updateOrder();
+    }
+
+    function changeQty(btn, delta) {
+        const qty = btn.parentElement.querySelector('.cocktail-qty');
+        let count = parseInt(qty.value) || 0;
+        count = Math.max(0, count + delta);
+        qty.value = count;
+        updateCard(qty);
+    }
+
+    document.querySelectorAll('.cocktail-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            const check = card.querySelector('.cocktail-check');
+            const qty = card.querySelector('.cocktail-qty');
+            check.checked = !check.checked;
+            if (check.checked) {
+                qty.value = Math.max(1, parseInt(qty.value) || 0);
+            } else {
+                qty.value = 0;
+            }
+            updateCard(qty);
+        });
+    });
+
+    document.querySelectorAll('.cocktail-check').forEach(check => {
+        check.addEventListener('change', () => {
+            const qty = check.parentElement.querySelector('.cocktail-qty');
+            if (check.checked) qty.value = Math.max(1, parseInt(qty.value) || 0);
+            else qty.value = 0;
+            updateCard(qty);
+        });
+    });
+
+    form.addEventListener('submit', (e) => {
+        updateOrder();
+        if (!orderInput.value.trim()) {
+            e.preventDefault();
+            alert('Выберите хотя бы один коктейль');
+        }
+    });
+</script>
+{% endblock %}

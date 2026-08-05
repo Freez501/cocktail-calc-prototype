@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёт — CocktailCalc Pro{% endblock %}
+
+{% block content %}
+<h2>📋 Отчёт по закупкам</h2>
+
+<div class="report-actions">
+    <a href="/export/txt?order={{ order_text | urlencode }}" class="button">📄 Скачать TXT</a>
+    <a href="/" class="button secondary">Новый расчёт</a>
+</div>
+
+<pre class="report">{{ report_text }}</pre>
+
+<div class="report-actions">
+    <a href="/export/txt?order={{ order_text | urlencode }}" class="button">📄 Скачать TXT</a>
+    <a href="/" class="button secondary">Новый расчёт</a>
+</div>
+{% endblock %}

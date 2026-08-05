@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Меню — CocktailCalc Pro{% endblock %}
+
+{% block content %}
+<h2>📋 Доступные коктейли</h2>
+
+<div class="filter-bar">
+    <select id="categoryFilter" onchange="filterCocktails(this.value)">
+        <option value="all">Все категории</option>
+        <option value="авторский">Авторский</option>
+        <option value="классический">Классический</option>
+        <option value="безалкогольный">Безалкогольный</option>
+    </select>
+</div>
+
+<ul class="menu-list">
+    {% for key, cocktail in cocktails.items() %}
+    <li data-category="{{ cocktail.category }}">
+        <strong>{{ cocktail.name }}</strong><br>
+        <small>
+            {% for ing in cocktail.recipe.keys() if not ing.startswith('(ПФ)') %}
+                {{ ing }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </small>
+    </li>
+    {% endfor %}
+</ul>
+
+<style>
+    .filter-bar {
+        margin-bottom: 16px;
+    }
+    .filter-bar select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: #f0e5d1;
+        color: #601203;
+        border: 1px solid #601203;
+        border-radius: 30px;
+        padding: 8px 36px 8px 16px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        min-width: 160px;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23601203' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+    }
+    .filter-bar select:hover {
+        background-color: #601203;
+        color: #f0e5d1;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+    }
+    .filter-bar select:focus {
+        outline: none;
+    }
+    .menu-list li.hidden {
+        display: none;
+    }
+</style>
+
+<script>
+    function filterCocktails(category) {
+        document.querySelectorAll('.menu-list li').forEach(item => {
+            if (category === 'all' || item.dataset.category === category) {
+                item.classList.remove('hidden');
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+    }
+</script>
+
+<div class="report-actions">
+    <a href="/" class="button">← Назад к расчёту</a>
+</div>
+{% endblock %}

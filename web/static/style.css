@@ -1,0 +1,238 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Georgia", "Times New Roman", serif;
+    margin: 0;
+    padding: 0;
+    background: #f0e5d1;
+    color: #601203;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+header {
+    background: #601203;
+    color: #f0e5d1;
+    padding: 28px;
+    border-radius: 16px;
+    margin-bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 16px rgba(96, 18, 3, 0.25);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 400;
+    letter-spacing: 1px;
+}
+
+header p {
+    margin: 6px 0 0;
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+nav a {
+    color: #f0e5d1;
+    text-decoration: none;
+    margin-left: 20px;
+    font-weight: 500;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+nav a:hover {
+    border-bottom-color: #f0e5d1;
+}
+
+main {
+    background: #fffdf8;
+    padding: 28px;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(96, 18, 3, 0.08);
+    border: 1px solid #e6d8c0;
+}
+
+h2, h3 {
+    margin-top: 0;
+    color: #601203;
+    font-weight: 400;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+input[type="number"] {
+    width: 80px;
+    padding: 10px;
+    border: 1px solid #c9b89e;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: #fffdf8;
+    color: #601203;
+    text-align: center;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    border-color: #601203;
+}
+
+.hint {
+    color: #8a6b55;
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+button, .button {
+    display: inline-block;
+    background: #601203;
+    color: #f0e5d1;
+    border: 1px solid #601203;
+    padding: 14px 32px;
+    border-radius: 30px;
+    font-size: 1rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    margin-top: 12px;
+    margin-right: 8px;
+    transition: background 0.2s, color 0.2s;
+}
+
+button:hover, .button:hover {
+    background: #f0e5d1;
+    color: #601203;
+}
+
+.button.secondary {
+    background: #f0e5d1;
+    color: #601203;
+}
+
+.button.secondary:hover {
+    background: #601203;
+    color: #f0e5d1;
+}
+
+.cocktail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.cocktail-card {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #d8c9b0;
+    border-radius: 12px;
+    cursor: pointer;
+    background: #f7f1e6;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.cocktail-card:hover {
+    border-color: #601203;
+    box-shadow: 0 2px 8px rgba(96, 18, 3, 0.12);
+    background: #fff8ea;
+}
+
+.cocktail-card.selected {
+    border-color: #601203;
+    background: #f0e5d1;
+}
+
+.cocktail-name {
+    font-size: 1rem;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.cocktail-card button {
+    margin-top: 0;
+    margin-right: 0;
+}
+
+.cocktail-qty {
+    width: 60px !important;
+    padding: 6px !important;
+}
+
+.report {
+    background: #f7f1e6;
+    border: 1px solid #d8c9b0;
+    border-radius: 12px;
+    padding: 24px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.95rem;
+    color: #601203;
+}
+
+.report-actions {
+    margin: 20px 0;
+}
+
+.menu-list {
+    list-style: none;
+    padding: 0;
+}
+
+.menu-list li {
+    padding: 14px;
+    border-bottom: 1px solid #e6d8c0;
+}
+
+.menu-list li:last-child {
+    border-bottom: none;
+}
+
+.menu-list small {
+    color: #8a6b55;
+}
+
+footer {
+    text-align: center;
+    color: #8a6b55;
+    margin-top: 28px;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    nav {
+        margin-top: 12px;
+    }
+
+    nav a {
+        margin-left: 0;
+        margin-right: 16px;
+    }
+
+    .cocktail-grid {
+        grid-template-columns: 1fr;
+    }
+}

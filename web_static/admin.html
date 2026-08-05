@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админка базы — CocktailCalc Pro</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Georgia", "Times New Roman", serif;
+            margin: 0; padding: 0; background: #f0e5d1; color: #601203; line-height: 1.6;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+        header {
+            background: #601203; color: #f0e5d1; padding: 28px; border-radius: 16px;
+            margin-bottom: 28px; box-shadow: 0 4px 16px rgba(96, 18, 3, 0.25);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        header h1 { margin: 0; font-size: 1.8rem; font-weight: 400; letter-spacing: 1px; }
+        header p { margin: 6px 0 0; font-size: 0.95rem; opacity: 0.85; }
+        nav a { color: #f0e5d1; text-decoration: none; margin-left: 20px; font-weight: 500; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+        nav a:hover { border-bottom-color: #f0e5d1; }
+        main {
+            background: #fffdf8; padding: 28px; border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(96, 18, 3, 0.08); border: 1px solid #e6d8c0;
+        }
+        h2, h3 { margin-top: 0; color: #601203; font-weight: 400; }
+        .hint { color: #8a6b55; font-size: 0.95rem; margin-top: 4px; }
+
+        button {
+            display: inline-block; background: #601203; color: #f0e5d1; border: 1px solid #601203;
+            padding: 14px 32px; border-radius: 30px; font-size: 1rem; font-family: inherit;
+            cursor: pointer; text-decoration: none; margin-top: 12px; transition: background 0.2s, color 0.2s;
+        }
+        button:hover { background: #f0e5d1; color: #601203; }
+        .button-secondary { background: #f0e5d1; color: #601203; }
+        .button-secondary:hover { background: #601203; color: #f0e5d1; }
+        .button-danger { background: #c53030; border-color: #c53030; color: #fff; }
+        .button-danger:hover { background: #fff; color: #c53030; }
+        .button-small { padding: 8px 16px; font-size: 0.9rem; }
+
+        .admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #d8c9b0; padding-bottom: 12px; }
+        .tab-btn { background: #f0e5d1; color: #601203; border: 1px solid #d8c9b0; border-radius: 20px; padding: 10px 24px; cursor: pointer; transition: all 0.2s; }
+        .tab-btn.active, .tab-btn:hover { background: #601203; color: #f0e5d1; border-color: #601203; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .section-header h3 { margin: 0; }
+        .admin-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .admin-card {
+            background: #f7f1e6; border: 1px solid #d8c9b0; border-radius: 12px; padding: 16px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .admin-card:hover { border-color: #601203; box-shadow: 0 2px 8px rgba(96, 18, 3, 0.12); background: #fff8ea; }
+        .admin-card h4 { margin: 0 0 8px; color: #601203; }
+        .admin-card small { color: #8a6b55; }
+        .admin-actions { margin-top: 28px; padding-top: 20px; border-top: 1px solid #d8c9b0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .save-status { color: #601203; font-weight: 500; }
+
+        .admin-table-wrapper { overflow-x: auto; }
+        .admin-table { width: 100%; border-collapse: collapse; }
+        .admin-table th, .admin-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e6d8c0; }
+        .admin-table th { background: #f0e5d1; color: #601203; font-weight: 600; }
+        .admin-table tr:hover { background: #f7f1e6; cursor: pointer; }
+
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background: rgba(96, 18, 3, 0.4); padding: 40px 20px;
+        }
+        .modal.active { display: block; }
+        .modal-content {
+            background: #fffdf8; margin: 0 auto; max-width: 600px; border-radius: 16px; padding: 28px;
+            border: 1px solid #d8c9b0; position: relative;
+        }
+        .modal-close { position: absolute; right: 20px; top: 16px; font-size: 1.8rem; cursor: pointer; color: #601203; }
+        .modal-content label { display: block; margin: 14px 0 6px; font-weight: 600; }
+        .modal-content input, .modal-content select {
+            width: 100%; padding: 10px; border: 1px solid #c9b89e; border-radius: 8px;
+            background: #f7f1e6; color: #601203; font-family: inherit;
+        }
+        .modal-content input:focus, .modal-content select:focus { outline: none; border-color: #601203; }
+        .modal-content h4 { margin-top: 24px; margin-bottom: 10px; color: #601203; }
+        .kv-rows { display: flex; flex-direction: column; gap: 8px; }
+        .kv-row { display: flex; gap: 8px; align-items: center; }
+        .kv-row input { flex: 1; }
+        .kv-row input.amount { flex: 0 0 100px; }
+        .kv-row button { padding: 6px 12px; font-size: 0.85rem; margin: 0; }
+        .modal-actions { margin-top: 28px; display: flex; gap: 12px; }
+        footer { text-align: center; color: #8a6b55; margin-top: 28px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>🛠 Админка базы</h1>
+                <p>Редактирование коктейлей и ПФ</p>
+            </div>
+            <nav>
+                <a href="index.html">Расчёт</a>
+                <a href="admin.html">База</a>
+            </nav>
+        </header>
+        <main>
+            <h2>База данных</h2>
+            <p class="hint">Эта страница работает без сервера. Изменения сохраняются в файл через скачивание — замени им <code>data/cocktails_db.json</code>.</p>
+
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="switchTab('cocktails')">Коктейли</button>
+                <button class="tab-btn" onclick="switchTab('pf')">Полуфабрикаты</button>
+                <button class="tab-btn" onclick="switchTab('ingredients')">Ингредиенты</button>
+            </div>
+
+            <div id="cocktails-tab" class="tab-panel active">
+                <div class="section-header">
+                    <h3>Коктейли</h3>
+                    <button class="button-secondary button-small" onclick="openCocktailModal()">+ Добавить коктейль</button>
+                </div>
+                <div id="cocktailsList" class="admin-list"></div>
+            </div>
+
+            <div id="pf-tab" class="tab-panel">
+                <div class="section-header">
+                    <h3>Полуфабрикаты</h3>
+                    <button class="button-secondary button-small" onclick="openPfModal()">+ Добавить ПФ</button>
+                </div>
+                <div id="pfList" class="admin-list"></div>
+            </div>
+
+            <div id="ingredients-tab" class="tab-panel">
+                <div class="section-header">
+                    <h3>Ингредиенты</h3>
+                    <button class="button-secondary button-small" onclick="openIngredientModal()">+ Добавить ингредиент</button>
+                </div>
+                <div id="ingredientsList" class="admin-table-wrapper"></div>
+            </div>
+
+            <div class="admin-actions">
+                <button onclick="downloadDatabase()">💾 Скачать JSON</button>
+                <button class="button-secondary" onclick="copyDatabase()">📋 Копировать JSON</button>
+                <button class="button-secondary" onclick="resetDatabase()">↺ Сбросить</button>
+                <span id="saveStatus" class="save-status"></span>
+            </div>
+        </main>
+        <footer>
+            <p>CocktailCalc Pro — Brilliant Event style</p>
+        </footer>
+    </div>
+
+    <!-- Модальное окно коктейля -->
+    <div id="cocktailModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('cocktailModal')">&times;</span>
+            <h3 id="cocktailModalTitle">Коктейль</h3>
+            <label>Ключ (латиница/транслит):</label>
+            <input type="text" id="cocktailKey" placeholder="mojito">
+            <label>Название:</label>
+            <input type="text" id="cocktailName" placeholder="Мохито">
+
+            <h4>Рецепт</h4>
+            <div id="cocktailRecipeRows" class="kv-rows"></div>
+            <button type="button" class="button-secondary button-small" onclick="addRecipeRow('cocktailRecipeRows')">+ Ингредиент</button>
+
+            <h4>Украшения</h4>
+            <div id="cocktailDecorRows" class="kv-rows"></div>
+            <button type="button" class="button-secondary button-small" onclick="addDecorRow('cocktailDecorRows')">+ Украшение</button>
+
+            <h4>Посуда</h4>
+            <div id="cocktailGlassRows" class="kv-rows"></div>
+            <button type="button" class="button-secondary button-small" onclick="addGlassRow('cocktailGlassRows')">+ Посуда</button>
+
+            <div class="modal-actions">
+                <button onclick="saveCocktail()">Сохранить</button>
+                <button class="button-secondary" onclick="closeModal('cocktailModal')">Отмена</button>
+                <button class="button-danger" onclick="deleteCocktail()">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно ПФ -->
+    <div id="pfModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('pfModal')">&times;</span>
+            <h3 id="pfModalTitle">Полуфабрикат</h3>
+            <label>Ключ:</label>
+            <input type="text" id="pfKey" placeholder="sakharnyi_sirop">
+            <label>Название:</label>
+            <input type="text" id="pfName" placeholder="(ПФ) Сахарный сироп">
+            <label>Выход (литры):</label>
+            <input type="number" id="pfOutput" step="0.01" value="1">
+
+            <h4>Рецепт ПФ</h4>
+            <div id="pfRecipeRows" class="kv-rows"></div>
+            <button type="button" class="button-secondary button-small" onclick="addRecipeRow('pfRecipeRows')">+ Ингредиент</button>
+
+            <div class="modal-actions">
+                <button onclick="savePf()">Сохранить</button>
+                <button class="button-secondary" onclick="closeModal('pfModal')">Отмена</button>
+                <button class="button-danger" onclick="deletePf()">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно ингредиента -->
+    <div id="ingredientModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('ingredientModal')">&times;</span>
+            <h3 id="ingredientModalTitle">Ингредиент</h3>
+            <label>Ключ (как в рецептах):</label>
+            <input type="text" id="ingredientKey" placeholder="ром белый">
+            <label>Категория:</label>
+            <select id="ingredientCategory">
+                <option value="алкоголь">Алкоголь</option>
+                <option value="безалкогольное">Безалкогольное</option>
+                <option value="сироп">Сироп</option>
+                <option value="пюре">Пюре</option>
+                <option value="концентрат">Концентрат</option>
+                <option value="сухой_гр">Сухой (гр)</option>
+                <option value="лёд_кубик">Лёд кубиковый</option>
+                <option value="лёд_фигурный">Лёд фигурный</option>
+                <option value="украшение_шт">Украшение (шт)</option>
+                <option value="украшение_гр">Украшение (гр)</option>
+                <option value="посуда">Посуда</option>
+            </select>
+            <label>Объём бутылки (л):</label>
+            <input type="number" id="ingredientVolume" step="0.01" value="0.7">
+            <label>Цена (₽):</label>
+            <input type="number" id="ingredientPrice" step="1" value="0">
+
+            <div class="modal-actions">
+                <button onclick="saveIngredient()">Сохранить</button>
+                <button class="button-secondary" onclick="closeModal('ingredientModal')">Отмена</button>
+                <button class="button-danger" onclick="deleteIngredient()">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script>
+        let database = JSON.parse(JSON.stringify(DB));
+        let currentCocktailKey = null;
+        let currentPfKey = null;
+        let currentIngredientKey = null;
+
+        function loadDatabase() {
+            // При первой загрузке используем встроенную базу.
+            // Можно заменить cocktails_db.json вручную.
+            renderAll();
+        }
+
+        function renderAll() {
+            renderCocktails();
+            renderPf();
+            renderIngredients();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(`${tab}-tab`).classList.add('active');
+        }
+
+        // ─── Коктейли ───────────────────────────────────────────────────────────
+        function renderCocktails() {
+            const list = document.getElementById('cocktailsList');
+            list.innerHTML = '';
+            for (let [key, cocktail] of Object.entries(database.cocktails || {})) {
+                const card = document.createElement('div');
+                card.className = 'admin-card';
+                const ings = Object.keys(cocktail.recipe || {}).join(', ');
+                card.innerHTML = `<h4>${cocktail.name}</h4><small>${ings}</small>`;
+                card.onclick = () => openCocktailModal(key);
+                list.appendChild(card);
+            }
+        }
+
+        function openCocktailModal(key = null) {
+            currentCocktailKey = key;
+            const cocktail = key ? database.cocktails[key] : { name: '', recipe: {}, decorations: {}, glassware: {} };
+            document.getElementById('cocktailModalTitle').textContent = key ? 'Редактировать коктейль' : 'Новый коктейль';
+            document.getElementById('cocktailKey').value = key || '';
+            document.getElementById('cocktailKey').disabled = !!key;
+            document.getElementById('cocktailName').value = cocktail.name || '';
+            fillKvRows('cocktailRecipeRows', cocktail.recipe || {});
+            fillKvRows('cocktailDecorRows', cocktail.decorations || {});
+            fillKvRows('cocktailGlassRows', cocktail.glassware || {});
+            document.getElementById('cocktailModal').classList.add('active');
+        }
+
+        function saveCocktail() {
+            const key = document.getElementById('cocktailKey').value.trim().toLowerCase();
+            const name = document.getElementById('cocktailName').value.trim();
+            if (!key || !name) { alert('Заполните ключ и название'); return; }
+            if (!database.cocktails) database.cocktails = {};
+            database.cocktails[key] = {
+                name: name,
+                recipe: readKvRows('cocktailRecipeRows'),
+                decorations: readKvRows('cocktailDecorRows'),
+                glassware: readKvRows('cocktailGlassRows'),
+            };
+            renderCocktails();
+            closeModal('cocktailModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        function deleteCocktail() {
+            if (!currentCocktailKey || !confirm('Удалить коктейль?')) return;
+            delete database.cocktails[currentCocktailKey];
+            renderCocktails();
+            closeModal('cocktailModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        // ─── ПФ ─────────────────────────────────────────────────────────────────
+        function renderPf() {
+            const list = document.getElementById('pfList');
+            list.innerHTML = '';
+            for (let [key, pf] of Object.entries(database.semi_products || {})) {
+                const card = document.createElement('div');
+                card.className = 'admin-card';
+                const ings = Object.keys(pf.recipe || {}).join(', ');
+                card.innerHTML = `<h4>${pf.name}</h4><small>Выход: ${pf.output_volume} л — ${ings}</small>`;
+                card.onclick = () => openPfModal(key);
+                list.appendChild(card);
+            }
+        }
+
+        function openPfModal(key = null) {
+            currentPfKey = key;
+            const pf = key ? database.semi_products[key] : { name: '', output_volume: 1, recipe: {} };
+            document.getElementById('pfModalTitle').textContent = key ? 'Редактировать ПФ' : 'Новый ПФ';
+            document.getElementById('pfKey').value = key || '';
+            document.getElementById('pfKey').disabled = !!key;
+            document.getElementById('pfName').value = pf.name || '';
+            document.getElementById('pfOutput').value = pf.output_volume || 1;
+            fillKvRows('pfRecipeRows', pf.recipe || {});
+            document.getElementById('pfModal').classList.add('active');
+        }
+
+        function savePf() {
+            const key = document.getElementById('pfKey').value.trim().toLowerCase();
+            const name = document.getElementById('pfName').value.trim();
+            const output = parseFloat(document.getElementById('pfOutput').value) || 1;
+            if (!key || !name) { alert('Заполните ключ и название'); return; }
+            if (!database.semi_products) database.semi_products = {};
+            database.semi_products[key] = { name: name, output_volume: output, recipe: readKvRows('pfRecipeRows') };
+            renderPf();
+            closeModal('pfModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        function deletePf() {
+            if (!currentPfKey || !confirm('Удалить ПФ?')) return;
+            delete database.semi_products[currentPfKey];
+            renderPf();
+            closeModal('pfModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        // ─── Ингредиенты ─────────────────────────────────────────────────────────
+        function renderIngredients() {
+            const wrapper = document.getElementById('ingredientsList');
+            const allKeys = new Set([
+                ...Object.keys(database.categories || {}),
+                ...Object.keys(database.prices || {}),
+                ...Object.keys(database.bottle_volumes || {}),
+            ]);
+            const rows = [];
+            for (let key of [...allKeys].sort()) {
+                rows.push({
+                    key,
+                    category: database.categories?.[key] || '-',
+                    volume: database.bottle_volumes?.[key] ?? '-',
+                    price: database.prices?.[key] ?? '-',
+                });
+            }
+            wrapper.innerHTML = `
+                <table class="admin-table">
+                    <thead><tr><th>Ингредиент</th><th>Категория</th><th>Объём (л)</th><th>Цена (₽)</th></tr></thead>
+                    <tbody>${rows.map(r => `
+                        <tr onclick="openIngredientModal('${r.key.replace(/'/g, "\\'")}')">
+                            <td>${r.key}</td><td>${r.category}</td><td>${r.volume}</td><td>${r.price}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        function openIngredientModal(key = null) {
+            currentIngredientKey = key;
+            document.getElementById('ingredientModalTitle').textContent = key ? 'Редактировать ингредиент' : 'Новый ингредиент';
+            document.getElementById('ingredientKey').value = key || '';
+            document.getElementById('ingredientKey').disabled = !!key;
+            document.getElementById('ingredientCategory').value = key ? (database.categories[key] || 'алкоголь') : 'алкоголь';
+            document.getElementById('ingredientVolume').value = key ? (database.bottle_volumes[key] ?? 0.7) : 0.7;
+            document.getElementById('ingredientPrice').value = key ? (database.prices[key] ?? 0) : 0;
+            document.getElementById('ingredientModal').classList.add('active');
+        }
+
+        function saveIngredient() {
+            const key = document.getElementById('ingredientKey').value.trim().toLowerCase();
+            const category = document.getElementById('ingredientCategory').value;
+            const volume = parseFloat(document.getElementById('ingredientVolume').value) || 0;
+            const price = parseInt(document.getElementById('ingredientPrice').value) || 0;
+            if (!key) { alert('Введите ключ ингредиента'); return; }
+            if (!database.categories) database.categories = {};
+            if (!database.bottle_volumes) database.bottle_volumes = {};
+            if (!database.prices) database.prices = {};
+            database.categories[key] = category;
+            database.bottle_volumes[key] = volume;
+            database.prices[key] = price;
+            renderIngredients();
+            closeModal('ingredientModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        function deleteIngredient() {
+            if (!currentIngredientKey || !confirm('Удалить ингредиент?')) return;
+            delete database.categories[currentIngredientKey];
+            delete database.bottle_volumes[currentIngredientKey];
+            delete database.prices[currentIngredientKey];
+            renderIngredients();
+            closeModal('ingredientModal');
+            showStatus('Изменения в памяти. Скачай JSON для сохранения в файл.');
+        }
+
+        // ─── Универсальные KV-ряды ───────────────────────────────────────────────
+        function fillKvRows(containerId, obj) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            for (let [key, value] of Object.entries(obj)) addKvRow(containerId, key, value);
+        }
+        function addKvRow(containerId, key = '', value = '') {
+            const container = document.getElementById(containerId);
+            const row = document.createElement('div');
+            row.className = 'kv-row';
+            const isDecorOrGlass = containerId.includes('Decor') || containerId.includes('Glass');
+            row.innerHTML = `
+                <input type="text" class="kv-key" placeholder="${isDecorOrGlass ? 'название' : 'ингредиент'}" value="${key}">
+                <input type="text" class="kv-value ${isDecorOrGlass ? '' : 'amount'}" placeholder="${isDecorOrGlass ? 'кол-во' : 'литры'}" value="${value}">
+                <button type="button" class="button-secondary button-small" onclick="this.parentElement.remove()">×</button>`;
+            container.appendChild(row);
+        }
+        function addRecipeRow(containerId) { addKvRow(containerId, '', ''); }
+        function addDecorRow(containerId) { addKvRow(containerId, '', ''); }
+        function addGlassRow(containerId) { addKvRow(containerId, '', ''); }
+        function readKvRows(containerId) {
+            const result = {};
+            document.querySelectorAll(`#${containerId} .kv-row`).forEach(row => {
+                const key = row.querySelector('.kv-key').value.trim();
+                const value = parseFloat(row.querySelector('.kv-value').value);
+                if (key && !isNaN(value)) result[key] = value;
+            });
+            return result;
+        }
+
+        // ─── Сохранение JSON ────────────────────────────────────────────────────
+        function downloadDatabase() {
+            const blob = new Blob([JSON.stringify(database, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cocktails_db.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showStatus('✅ JSON скачан. Замени им data/cocktails_db.json');
+        }
+
+        async function copyDatabase() {
+            const text = JSON.stringify(database, null, 2);
+            try {
+                await navigator.clipboard.writeText(text);
+                showStatus('✅ JSON скопирован в буфер обмена');
+            } catch (e) {
+                showStatus('❌ Не удалось скопировать автоматически');
+            }
+        }
+
+        function resetDatabase() {
+            if (!confirm('Сбросить все изменения к исходной базе?')) return;
+            database = JSON.parse(JSON.stringify(DB));
+            renderAll();
+            showStatus('База сброшена');
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function showStatus(msg) { document.getElementById('saveStatus').textContent = msg; }
+
+        window.onclick = function(e) { if (e.target.classList.contains('modal')) e.target.classList.remove('active'); }
+
+        loadDatabase();
+    </script>
+</body>
+</html>

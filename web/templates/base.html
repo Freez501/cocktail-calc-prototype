@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CocktailCalc Pro{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>🍹 CocktailCalc Pro</h1>
+                <p>Расчёт закупок для выездного бара</p>
+            </div>
+            <nav>
+                <a href="/">Расчёт</a>
+                <a href="/menu">Меню</a>
+                <a href="/admin">База</a>
+            </nav>
+        </header>
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+        <footer>
+            <p>CocktailCalc Pro — Brilliant Event style</p>
+        </footer>
+    </div>
+</body>
+</html>
