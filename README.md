@@ -5,7 +5,7 @@
 ## Структура
 
 ```
-cockt_bot_refactored/
+BE_CALC_Prot1/
 ├── data/
 │   └── cocktails_db.json          # Единая база коктейлей, ПФ, цен и категорий
 ├── cocktail_calc/                 # Общее ядро расчётов
@@ -17,8 +17,6 @@ cockt_bot_refactored/
 │   ├── main.py
 │   ├── static/style.css
 │   └── templates/
-├── web_static/                    # Статическая демо-версия (HTML + JS)
-│   └── index.html
 ├── bot/                           # Telegram-бот
 │   ├── main.py
 │   └── handlers.py
@@ -26,56 +24,7 @@ cockt_bot_refactored/
 └── README.md
 ```
 
-## Быстрая проверка без Python
-
-Если Python ещё не установлен, можно открыть статическую демо-версию прямо в браузере:
-
-```
-web_static/index.html
-web_static/admin.html
-```
-
-Просто дважды кликни по файлу — откроется страница. База хранится в одном файле `web_static/db.js`, который читают обе страницы.
-
-- `index.html` — калькулятор закупок.
-- `admin.html` — редактор базы: коктейли, ПФ, ингредиенты. После редактирования нажми «Скачать JSON» и замени им `data/cocktails_db.json`.
-
-### Как обновить статические HTML после правки JSON
-
-Если ты редактируешь `data/cocktails_db.json` вручную или через FastAPI-админку, и хочешь, чтобы статические HTML-страницы тоже показывали новую базу:
-
-**Вариант 1 — двойной клик (Windows):**
-
-Открой папку `cockt_bot_refactored` и дважды кликни по `update_static.bat`. Он обновит `web_static/db.js`.
-
-**Вариант 2 — командная строка:**
-
-```bash
-cd cockt_bot_refactored
-python update_static.py
-```
-
-Если `python` не работает, попробуй:
-
-```bash
-python3 update_static.py
-```
-
-или
-
-```bash
-py update_static.py
-```
-
-После этого обнови страницы `index.html` и `admin.html` в браузере.
-
 ## Дизайн
-
-Цветовая схема взята с сайта [brilliantevent.ru](https://brilliantevent.ru/):
-- Бордо: `#601203`
-- Шампань: `#f0e5d1`
-
-## Установка
 
 ```bash
 pip install -r requirements.txt

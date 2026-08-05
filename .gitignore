@@ -16,9 +16,10 @@ env/
 *.swo
 *~
 
-# OS
+# OS shortcuts and files
 .DS_Store
 Thumbs.db
+*.lnk
 
 # Project auto-generated backups
 data/backups/
