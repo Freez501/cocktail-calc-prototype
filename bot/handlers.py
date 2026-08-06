@@ -195,7 +195,7 @@ async def process_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["last_result"] = result
 
-    response = format_report(result, db.categories)
+    response = format_report(result, db)
     keyboard = [[InlineKeyboardButton("📄 Экспорт TXT", callback_data="export_txt")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 

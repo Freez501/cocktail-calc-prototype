@@ -70,7 +70,7 @@ async def calculate(request: Request, order: str = Form(...)):
         raise HTTPException(status_code=400, detail="Не удалось распознать заказ")
 
     result = calculate_shopping_list(parsed, prices, db)
-    report_text = format_report(result, db.categories)
+    report_text = format_report(result, db)
 
     return templates.TemplateResponse(
         request=request,

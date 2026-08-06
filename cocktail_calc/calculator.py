@@ -274,11 +274,12 @@ def calculate_shopping_list(
         for dec, amount_per in cocktail.decorations.items():
             total_dec = amount_per * count
             cocktail_detail["ingredients"][dec] = total_dec
-            category = db.categories.get(dec, "украшение_шт")
-            if category == "украшение_шт":
-                decorations_pcs[dec] += total_dec
-            elif category == "украшение_гр":
+            unit = db.ingredient_info.get(dec, {}).get("unit")
+            category = db.categories.get(dec, "")
+            if unit in ("г", "кг") or category == "украшение_гр":
                 decorations_gr[dec] += total_dec
+            else:
+                decorations_pcs[dec] += total_dec
 
         for glass, amount_per in cocktail.glassware.items():
             total_glass = amount_per * count
@@ -367,9 +368,9 @@ def calculate_shopping_list(
     }
 
 
-def format_report(result: Dict, categories: Optional[Dict[str, str]] = None) -> str:
+def format_report(result: Dict, db: Optional[Database] = None) -> str:
     """Форматирует отчёт в красивый текст."""
-    categories = categories or {}
+    categories = db.categories if db else {}
     lines = []
 
     lines.append("╔══════════════════════════════════════════════════╗")
@@ -395,7 +396,7 @@ def format_report(result: Dict, categories: Optional[Dict[str, str]] = None) -> 
     for detail in result["detailed_calc"]:
         lines.append(f"▸ {detail['name']} × {detail['count']}:")
         for ing, amount in detail["ingredients"].items():
-            unit = _unit_for_ingredient(ing, categories)
+            unit = _unit_for_ingredient(ing, db)
             if unit == "л":
                 lines.append(f"   {ing}: {amount:.3f} л")
             elif unit == "кг":
@@ -440,11 +441,18 @@ def format_report(result: Dict, categories: Optional[Dict[str, str]] = None) -> 
     return "\n".join(lines)
 
 
-def _unit_for_ingredient(ing: str, categories: Dict[str, str]) -> str:
+def _unit_for_ingredient(ing: str, db: Optional[Database]) -> str:
     """Определяет единицу измерения для ингредиента в детальном расчёте."""
     if ing.startswith(PF_PREFIX):
         return "л"
-    category = categories.get(ing, "")
+    unit = db.ingredient_info.get(ing, {}).get("unit") if db else None
+    if unit in ("г", "кг"):
+        return "гр"
+    if unit == "шт":
+        return "шт"
+    if unit in ("л", "мл"):
+        return "л"
+    category = db.categories.get(ing, "") if db else ""
     unit_map = {
         "алкоголь": "л",
         "безалкогольное": "л",

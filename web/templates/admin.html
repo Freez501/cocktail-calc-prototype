@@ -25,6 +25,10 @@
             <option value="классический">Классический</option>
             <option value="безалкогольный">Безалкогольный</option>
         </select>
+        <select id="cocktailSort" onchange="setCocktailSort(this.value)">
+            <option value="name_asc" selected>А → Я</option>
+            <option value="name_desc">Я → А</option>
+        </select>
         <input type="text" id="cocktailSearch" class="search-input" placeholder="🔍 Поиск коктейля" oninput="setCocktailSearch(this.value)">
     </div>
     <div id="cocktailsList" class="admin-list"></div>
@@ -660,6 +664,38 @@
         return '(ПФ) ' + name.replace(/^\(ПФ\)\s*/, '');
     }
 
+    // Переименовывает ключ ингредиента/посуды во всех рецептах и справочниках
+    function renameKeyInDatabase(oldKey, newKey) {
+        if (oldKey === newKey) return;
+        const rootSections = ['categories', 'prices', 'bottle_volumes'];
+        for (const section of rootSections) {
+            if (database[section] && oldKey in database[section]) {
+                database[section][newKey] = database[section][oldKey];
+                delete database[section][oldKey];
+            }
+        }
+        if (database.ingredient_info && oldKey in database.ingredient_info) {
+            database.ingredient_info[newKey] = database.ingredient_info[oldKey];
+            delete database.ingredient_info[oldKey];
+        }
+        for (const cocktail of Object.values(database.cocktails || {})) {
+            for (const section of ['recipe', 'decorations', 'glassware']) {
+                const obj = cocktail[section];
+                if (obj && oldKey in obj) {
+                    obj[newKey] = obj[oldKey];
+                    delete obj[oldKey];
+                }
+            }
+        }
+        for (const pf of Object.values(database.semi_products || {})) {
+            const recipe = pf.recipe || {};
+            if (oldKey in recipe) {
+                recipe[newKey] = recipe[oldKey];
+                delete recipe[oldKey];
+            }
+        }
+    }
+
     let currentCategoryFilter = 'all';
     let currentSortMode = 'name_asc';
     let currentIngredientSearch = '';
@@ -782,9 +818,8 @@
             return;
         }
         dropdown.innerHTML = items.map((item, idx) => `
-            <div class="autocomplete-item" data-key="${escapeHtml(item.key)}" data-index="${idx}">
+            <div class="autocomplete-item" data-key="${escapeHtml(item.key)}" data-label="${escapeHtml(item.label)}" data-index="${idx}">
                 ${escapeHtml(item.label)}
-                <small>${escapeHtml(item.key)}</small>
             </div>
         `).join('');
         dropdown.classList.add('active');
@@ -801,8 +836,10 @@
         _renderAutocomplete(input, filtered);
     }
 
-    function _selectAutocompleteItem(input, key, onSelect) {
-        input.value = key;
+    function _selectAutocompleteItem(input, key, label, onSelect) {
+        input.value = label || key;
+        const actual = input.parentElement.querySelector('.kv-key-actual');
+        if (actual) actual.value = key;
         const dropdown = input.parentElement.querySelector('.autocomplete-dropdown');
         dropdown.classList.remove('active');
         input.dataset.activeIndex = '-1';
@@ -842,7 +879,7 @@
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 if (activeIndex >= 0 && items[activeIndex]) {
-                    _selectAutocompleteItem(input, items[activeIndex].dataset.key, onSelect);
+                    _selectAutocompleteItem(input, items[activeIndex].dataset.key, items[activeIndex].dataset.label, onSelect);
                 }
             } else if (e.key === 'Escape') {
                 dropdown.classList.remove('active');
@@ -852,7 +889,7 @@
         dropdown.addEventListener('mousedown', (e) => {
             const item = e.target.closest('.autocomplete-item[data-key]');
             if (item) {
-                _selectAutocompleteItem(input, item.dataset.key, onSelect);
+                _selectAutocompleteItem(input, item.dataset.key, item.dataset.label, onSelect);
             }
         });
     }
@@ -864,6 +901,11 @@
     }
 
     function getDisplayName(key) {
+        if (key.startsWith('(ПФ) ')) {
+            const pfKey = key.replace(/^\(ПФ\)\s*/, '');
+            const pf = database.semi_products?.[pfKey];
+            if (pf) return pf.name || key;
+        }
         const info = database.ingredient_info?.[key];
         return info?.display_name || key;
     }
@@ -889,10 +931,16 @@
 
     // ─── Коктейли ───────────────────────────────────────────────────────────
     let currentCocktailFilter = 'all';
+    let currentCocktailSort = 'name_asc';
     let currentCocktailSearch = '';
 
     function setCocktailFilter(value) {
         currentCocktailFilter = value;
+        renderCocktails();
+    }
+
+    function setCocktailSort(value) {
+        currentCocktailSort = value;
         renderCocktails();
     }
 
@@ -905,9 +953,19 @@
         const list = document.getElementById('cocktailsList');
         list.innerHTML = '';
         const query = currentCocktailSearch.trim().toLowerCase();
-        for (let [key, cocktail] of Object.entries(database.cocktails || {})) {
-            if (currentCocktailFilter !== 'all' && cocktail.category !== currentCocktailFilter) continue;
-            if (query && !(cocktail.name || '').toLowerCase().includes(query) && !key.toLowerCase().includes(query)) continue;
+        let entries = Object.entries(database.cocktails || {})
+            .filter(([key, cocktail]) => {
+                if (currentCocktailFilter !== 'all' && cocktail.category !== currentCocktailFilter) return false;
+                if (query && !(cocktail.name || '').toLowerCase().includes(query) && !key.toLowerCase().includes(query)) return false;
+                return true;
+            });
+        entries.sort((a, b) => {
+            const nameA = (a[1].name || a[0]).toLowerCase();
+            const nameB = (b[1].name || b[0]).toLowerCase();
+            if (currentCocktailSort === 'name_desc') return nameB.localeCompare(nameA);
+            return nameA.localeCompare(nameB);
+        });
+        for (let [key, cocktail] of entries) {
             const card = document.createElement('div');
             card.className = 'admin-card';
             const ings = Object.keys(cocktail.recipe || {}).join(', ');
@@ -966,6 +1024,20 @@
                 return;
             }
         }
+
+        // В поле «Посуда» должен быть указан существующий бокал, а не категория или текст
+        const validGlassware = new Set(
+            Object.entries(database.categories || {})
+                .filter(([_, cat]) => cat === 'посуда')
+                .map(([k, _]) => k)
+        );
+        for (const gwKey of Object.keys(glassware)) {
+            if (!validGlassware.has(gwKey)) {
+                alert(`Посуда «${gwKey}» не найдена в справочнике. Выберите бокал из выпадающего списка.`);
+                return;
+            }
+        }
+
         if (!database.cocktails) database.cocktails = {};
         database.cocktails[key] = {
             name: name,
@@ -1285,27 +1357,31 @@
             return;
         }
 
-        const res = await fetch('/admin/api/ingredient/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                old_key: oldKey,
-                new_key: newKey,
-                display_name: displayName,
-                unit: unit,
-                category: category,
-                volume: volume,
-                price: price,
-            }),
-        });
-        const result = await res.json();
-        if (res.ok) {
-            await loadDatabase();
-            closeModal('ingredientModal');
-            showStatus('✅ Ингредиент сохранён. Бэкап: ' + result.backup);
-        } else {
-            showStatus('❌ Ошибка: ' + (result.detail || 'не удалось сохранить'));
+        if (newKey !== oldKey && database.categories?.[newKey]) {
+            alert('Ингредиент с таким ключом уже существует');
+            return;
         }
+
+        renameKeyInDatabase(oldKey, newKey);
+        if (!database.categories) database.categories = {};
+        if (!database.bottle_volumes) database.bottle_volumes = {};
+        if (!database.prices) database.prices = {};
+        if (!database.ingredient_info) database.ingredient_info = {};
+        database.categories[newKey] = category;
+        database.bottle_volumes[newKey] = volume;
+        database.prices[newKey] = price;
+        database.ingredient_info[newKey] = { display_name: displayName || newKey, unit: unit };
+        currentIngredientKey = newKey;
+        markDirty();
+        buildItemList();
+        buildGlasswareList(glasswareItems);
+        buildIceItems();
+        renderCocktails();
+        renderIngredients();
+        renderGlassware();
+        renderPf();
+        closeModal('ingredientModal');
+        showStatus('Ингредиент обновлён. Нажмите «Сохранить базу»');
     }
 
     function deleteIngredient() {
@@ -1385,27 +1461,39 @@
             return;
         }
 
-        const res = await fetch('/admin/api/ingredient/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                old_key: oldKey,
-                new_key: newKey,
-                display_name: displayName,
-                unit: 'шт',
-                category: 'посуда',
-                volume: 0,
-                price: 0,
-            }),
-        });
-        const result = await res.json();
-        if (res.ok) {
-            await loadDatabase();
-            closeModal('glasswareModal');
-            showStatus('✅ Посуда сохранена. Бэкап: ' + result.backup);
-        } else {
-            showStatus('❌ Ошибка: ' + (result.detail || 'не удалось сохранить'));
+        if (newKey !== oldKey && database.categories?.[newKey]) {
+            alert('Посуда/ингредиент с таким ключом уже существует');
+            return;
         }
+
+        renameKeyInDatabase(oldKey, newKey);
+        if (!database.categories) database.categories = {};
+        if (!database.bottle_volumes) database.bottle_volumes = {};
+        if (!database.prices) database.prices = {};
+        if (!database.ingredient_info) database.ingredient_info = {};
+        database.categories[newKey] = 'посуда';
+        database.bottle_volumes[newKey] = 0;
+        database.prices[newKey] = 0;
+        database.ingredient_info[newKey] = { display_name: displayName || newKey, unit: 'шт' };
+
+        const idx = glasswareItems.findIndex(i => i.key === oldKey);
+        if (idx !== -1) {
+            glasswareItems[idx].key = newKey;
+            glasswareItems[idx].display_name = displayName || newKey;
+        } else {
+            glasswareItems.push({ key: newKey, display_name: displayName || newKey });
+        }
+        currentGlasswareKey = newKey;
+
+        markDirty();
+        buildItemList();
+        buildGlasswareList(glasswareItems);
+        renderCocktails();
+        renderIngredients();
+        renderGlassware();
+        renderPf();
+        closeModal('glasswareModal');
+        showStatus('Посуда обновлена. Нажмите «Сохранить базу»');
     }
 
     function deleteGlassware() {
@@ -1436,12 +1524,17 @@
                 displayUnit = getUnit(key);
                 if (displayUnit === 'л' && value < 0.1) { displayValue = value * 1000; displayUnit = 'мл'; }
                 else if (displayUnit === 'кг' && value < 0.1) { displayValue = value * 1000; displayUnit = 'г'; }
+            } else if (containerId.includes('Decor')) {
+                let u = getUnit(key);
+                if (u === 'гр') u = 'г';
+                if (!u) u = 'шт';
+                displayUnit = u;
             }
-            addKvRow(containerId, key, displayValue, displayUnit);
+            addKvRow(containerId, key, displayValue, displayUnit, getDisplayName(key));
         }
     }
 
-    function addKvRow(containerId, key = '', value = '', unit = null, items = null) {
+    function addKvRow(containerId, key = '', value = '', unit = null, displayName = null, items = null) {
         const container = document.getElementById(containerId);
         const row = document.createElement('div');
         row.className = 'kv-row';
@@ -1454,13 +1547,17 @@
         const pfViewButton = isPf
             ? `<button type="button" class="pf-view-inline" onclick="showPfRecipe('${escapeHtml(key)}')" title="Посмотреть рецепт ПФ">👁</button>`
             : '';
+        const displayValue = escapeHtml(displayName || getDisplayName(key));
         const keyInput = useAutocomplete
-            ? `<div class="autocomplete-wrapper${isPf ? ' has-pf-view' : ''}">${pfViewButton}<input type="text" class="kv-key" placeholder="${isDecor ? 'украшение' : (isIce ? 'лёд' : 'ингредиент')}" value="${escapeHtml(key)}" autocomplete="off"><div class="autocomplete-dropdown"></div></div>`
+            ? `<div class="autocomplete-wrapper${isPf ? ' has-pf-view' : ''}">${pfViewButton}<input type="text" class="kv-key" placeholder="${isDecor ? 'украшение' : (isIce ? 'лёд' : 'ингредиент')}" value="${displayValue}" autocomplete="off"><input type="hidden" class="kv-key-actual" value="${escapeHtml(key)}"><div class="autocomplete-dropdown"></div></div>`
             : (isGlass
                 ? `<input type="text" list="glasswareListData" class="kv-key" placeholder="посуда" value="${escapeHtml(key)}">`
                 : `<input type="text" class="kv-key" placeholder="название" value="${escapeHtml(key)}">`);
-        const unitSelect = (isRecipe || isIce)
-            ? `<select class="kv-unit">${buildUnitOptions(unit || getUnit(key))}</select>`
+        let defaultUnit = getUnit(key);
+        if (isDecor && defaultUnit === 'гр') defaultUnit = 'г';
+        if (isDecor && !defaultUnit) defaultUnit = 'шт';
+        const unitSelect = (isRecipe || isIce || isDecor)
+            ? `<select class="kv-unit">${buildUnitOptions(unit || defaultUnit)}</select>`
             : '';
         row.innerHTML = `
             ${keyInput}
@@ -1477,7 +1574,8 @@
             if (isRecipe || isIce) {
                 const unitSelectEl = row.querySelector('.kv-unit');
                 function updateUnitOptions() {
-                    const baseUnit = getUnit(keyInputEl.value.trim());
+                    const actualKey = wrapper.querySelector('.kv-key-actual').value.trim();
+                    const baseUnit = getUnit(actualKey);
                     const allowed = { 'л': ['л','мл'], 'кг': ['кг','г'], 'шт': ['шт'] }[baseUnit] || ['л','мл','кг','г','шт'];
                     const current = unitSelectEl.value;
                     unitSelectEl.innerHTML = allowed.map(u => `<option value="${u}"${u === current ? ' selected' : ''}>${u}</option>`).join('');
@@ -1498,13 +1596,13 @@
         addKvRow(containerId, '', '', 'л');
     }
     function addDecorRow(containerId) {
-        addKvRow(containerId, '', '');
+        addKvRow(containerId, '', '', 'шт');
     }
     function addGlassRow(containerId) {
         addKvRow(containerId, '', '');
     }
     function addIceRow(containerId) {
-        addKvRow(containerId, '', '', 'шт', iceItems);
+        addKvRow(containerId, '', '', 'шт', null, iceItems);
     }
 
     function showPfRecipe(key) {
@@ -1529,14 +1627,31 @@
     function readKvRows(containerId) {
         const result = {};
         document.querySelectorAll(`#${containerId} .kv-row`).forEach(row => {
-            const key = row.querySelector('.kv-key').value.trim();
-            let value = parseFloat(row.querySelector('.kv-value').value);
+            const actualInput = row.querySelector('.kv-key-actual');
+            const displayInput = row.querySelector('.kv-key');
+            let key = actualInput ? actualInput.value.trim() : (displayInput ? displayInput.value.trim() : '');
+            // Если ключ не выбран из списка, пытаемся найти по введённому названию
+            if (!key && displayInput) {
+                const typed = displayInput.value.trim().toLowerCase();
+                const items = displayInput._autocompleteItems || allItems || [];
+                const match = items.find(i => i.label.toLowerCase() === typed || i.key.toLowerCase() === typed);
+                key = match ? match.key : typed;
+            }
+            let value = parseFloat(row.querySelector('.kv-value').value.replace(',', '.'));
             const unitSelect = row.querySelector('.kv-unit');
             if (key && !isNaN(value)) {
                 if (unitSelect) {
                     const unit = unitSelect.value;
-                    const factor = { 'мл': 0.001, 'г': 0.001 }[unit] || 1;
-                    value = value * factor;
+                    if (containerId.includes('Decor')) {
+                        // Для украшений единица хранится в ingredient_info; категорию не трогаем
+                        if (!database.ingredient_info) database.ingredient_info = {};
+                        if (!database.ingredient_info[key]) database.ingredient_info[key] = {};
+                        database.ingredient_info[key].unit = unit;
+                        if (unit === 'кг') value *= 1000;
+                    } else {
+                        const factor = { 'мл': 0.001, 'г': 0.001 }[unit] || 1;
+                        value = value * factor;
+                    }
                 }
                 result[key] = value;
             }
