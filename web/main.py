@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import shutil
@@ -13,12 +14,14 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from jinja2 import Environment, FileSystemLoader
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from cocktail_calc.calculator import (
     calculate_shopping_list,
@@ -334,3 +337,148 @@ async def admin_backup(credentials=Depends(verify_admin)):
     shutil.copy2(DB_FILE, backup_path)
     _rotate_backups()
     return {"status": "ok", "backup": backup_path}
+
+
+def _format_amount_and_unit(name: str, amount: float, category: str = "") -> tuple:
+    unit = _default_unit(category) if category else "л"
+    if "лёд" in name or category in ("лёд_кубик", "лёд_фигурный"):
+        unit = "шт" if "фигурный" in name or category == "лёд_фигурный" else "кг"
+        return round(amount, 3), unit
+    if category == "сухой_гр":
+        return round(amount, 3), "кг"
+    if category == "украшение_гр":
+        return round(amount, 3), "гр"
+    if category == "украшение_шт":
+        return int(amount), "шт"
+    if category == "посуда":
+        return int(amount), "шт"
+    if isinstance(amount, float) and 0 < amount < 0.1:
+        return round(amount * 1000, 2), "мл"
+    return round(amount, 3), "л"
+
+
+def _generate_ttk_excel(portions: int = 1):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ТТК Коктейли"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="4BACC6")
+    cat_fill = PatternFill("solid", fgColor="9BBB59")
+    label_fill = PatternFill("solid", fgColor="F79646")
+    item_odd_fill = PatternFill("solid", fgColor="D9D9D9")
+    item_even_fill = PatternFill("solid", fgColor="FFFFFF")
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    def append_row(col1, name, per_one, portions_val, total, fill=None, bold=False, font_color="000000"):
+        ws.append([col1, name, per_one, portions_val, total])
+        row = ws.max_row
+        for c in range(1, 6):
+            cell = ws.cell(row=row, column=c)
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if fill:
+                cell.fill = fill
+            if bold:
+                cell.font = Font(bold=True, color=font_color)
+            if c == 1 and col1:
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Шапка
+    append_row("", "Наименование", "Количество на 1 коктейль", "Количество порций", "Общее количество (Кг/Л)", fill=header_fill, bold=True, font_color="FFFFFF")
+
+    for idx, (ckey, cocktail) in enumerate(db.cocktails.items(), 1):
+        name = cocktail.name
+        recipe = cocktail.recipe
+        decorations = cocktail.decorations
+        glassware = cocktail.glassware
+
+        # Выход коктейля — сумма жидких ингредиентов
+        liquid_total = 0.0
+        for ing, amount in recipe.items():
+            if "лёд" in ing:
+                continue
+            cat = db.categories.get(ing, "")
+            if cat in ("алкоголь", "безалкогольное", "сироп", "пюре", "концентрат", ""):
+                liquid_total += amount
+        cocktail_per_one = round(liquid_total, 3)
+        cocktail_total = round(cocktail_per_one * portions, 3)
+
+        # Заголовок коктейля
+        fill = cat_fill if idx % 2 == 1 else PatternFill("solid", fgColor="B7D58C")
+        append_row("Коктейль:", name, cocktail_per_one, portions, cocktail_total, fill=fill, bold=True)
+
+        # Ингредиенты рецепта
+        recipe_items = [(ing, amount) for ing, amount in recipe.items() if "лёд" not in ing]
+        for i, (ing, amount) in enumerate(recipe_items):
+            cat = db.categories.get(ing, "")
+            a, u = _format_amount_and_unit(ing, amount, cat)
+            t = round(a * portions, 3) if u != "шт" else int(a) * portions
+            item_fill = item_odd_fill if i % 2 == 0 else item_even_fill
+            append_row("", ing, a, portions, t, fill=item_fill)
+
+        # Лёд
+        ice_items = [(ing, amount) for ing, amount in recipe.items() if "лёд" in ing]
+        if ice_items:
+            for i, (ing, amount) in enumerate(ice_items):
+                cat = db.categories.get(ing, "")
+                a, u = _format_amount_and_unit(ing, amount, cat)
+                t = round(a * portions, 3) if u != "шт" else int(a) * portions
+                label = "Лёд:" if i == 0 else ""
+                append_row(label, ing, a, portions, t, fill=label_fill, bold=True)
+        else:
+            append_row("Лёд:", "Отсутствует", "", portions, "", fill=label_fill, bold=True)
+
+        # Украшение
+        if decorations:
+            for i, (d, amount) in enumerate(decorations.items()):
+                cat = db.categories.get(d, "")
+                a, u = _format_amount_and_unit(d, amount, cat)
+                t = round(a * portions, 3) if u != "шт" else int(a) * portions
+                label = "Украшение:" if i == 0 else ""
+                append_row(label, d, a, portions, t, fill=label_fill, bold=True)
+        else:
+            append_row("Украшение:", "Отсутствует", "", portions, "", fill=label_fill, bold=True)
+
+        # Посуда
+        if glassware:
+            for i, (g, amount) in enumerate(glassware.items()):
+                a, u = _format_amount_and_unit(g, int(amount), "посуда")
+                t = a * portions
+                label = "Посуда:" if i == 0 else ""
+                append_row(label, g, a, portions, t, fill=label_fill, bold=True)
+        else:
+            append_row("Посуда:", "Отсутствует", "", portions, "", fill=label_fill, bold=True)
+
+        # Разделитель
+        ws.append(["", "", "", "", ""])
+
+    ws.column_dimensions["A"].width = 18
+    ws.column_dimensions["B"].width = 35
+    ws.column_dimensions["C"].width = 24
+    ws.column_dimensions["D"].width = 20
+    ws.column_dimensions["E"].width = 26
+    ws.freeze_panes = "A2"
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+@app.get("/admin/api/download_ttk")
+async def admin_download_ttk(portions: int = 1, credentials=Depends(verify_admin)):
+    if portions < 1:
+        raise HTTPException(status_code=400, detail="Количество порций должно быть ≥ 1")
+    output = _generate_ttk_excel(portions)
+    filename = f"ttk_cocktails_{portions}port_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

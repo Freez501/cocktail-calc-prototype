@@ -62,6 +62,7 @@
 <div class="admin-actions">
     <button onclick="saveDatabase()">💾 Сохранить базу</button>
     <button class="button secondary" onclick="createBackup()">Создать бэкап</button>
+    <button class="button secondary" onclick="downloadTtk()">Скачать TTK</button>
     <button class="button secondary" onclick="exportDatabase()">Экспорт</button>
     <button class="button secondary" onclick="document.getElementById('importFile').click()">Импорт</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none;" onchange="importDatabase(this)">
@@ -1734,6 +1735,31 @@
             input.value = '';
         };
         reader.readAsText(file);
+    }
+
+    async function downloadTtk() {
+        const portions = prompt('Количество порций для TTK:', '1');
+        if (portions === null || portions === '') return;
+        if (isNaN(portions) || portions < 1) {
+            alert('Введите число больше 0');
+            return;
+        }
+        showStatus('Формирую TTK...');
+        const res = await fetch('/admin/api/download_ttk?portions=' + encodeURIComponent(portions));
+        if (!res.ok) {
+            showStatus('❌ Ошибка формирования TTK');
+            return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ttk_cocktails.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showStatus('✅ TTK скачан');
     }
 
     function closeModal(id) {

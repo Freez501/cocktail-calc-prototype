@@ -2,6 +2,12 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 
+:: Сначала пробуем виртуальное окружение в папке проекта
+if exist ".venv\Scripts\python.exe" (
+    set PYTHON_CMD=.venv\Scripts\python.exe
+    goto :run
+)
+
 py --version >nul 2>&1
 if not errorlevel 1 (
     set PYTHON_CMD=py
