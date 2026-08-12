@@ -15,6 +15,7 @@ env/
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS shortcuts and files
 .DS_Store

@@ -12,9 +12,13 @@
     <div class="filter-bar">
         <select id="categoryFilter" onchange="filterCocktails(this.value)">
             <option value="all">Все категории</option>
-            <option value="авторский">Авторский</option>
-            <option value="классический">Классический</option>
-            <option value="безалкогольный">Безалкогольный</option>
+            {% for category in cocktail_categories %}
+            <option value="{{ category }}">{{ category[:1]|upper }}{{ category[1:] }}</option>
+            {% endfor %}
+        </select>
+        <select id="sortFilter" onchange="sortCocktails(this.value)">
+            <option value="name_asc" selected>А → Я</option>
+            <option value="name_desc">Я → А</option>
         </select>
     </div>
 
@@ -35,8 +39,11 @@
 
 <style>
     .filter-bar {
-            margin-bottom: 16px;
-        }
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
         .filter-bar select {
             appearance: none;
             -webkit-appearance: none;
@@ -96,6 +103,19 @@
                 card.classList.add('hidden');
             }
         });
+    }
+
+    function sortCocktails(mode) {
+        const grid = document.querySelector('.cocktail-grid');
+        const cards = Array.from(grid.children);
+        cards.sort((a, b) => {
+            const na = a.querySelector('.cocktail-name').textContent.trim();
+            const nb = b.querySelector('.cocktail-name').textContent.trim();
+            return mode === 'name_desc'
+                ? nb.localeCompare(na, 'ru')
+                : na.localeCompare(nb, 'ru');
+        });
+        cards.forEach(card => grid.appendChild(card));
     }
 
     const orderInput = document.getElementById('order');
@@ -160,5 +180,8 @@
             alert('Выберите хотя бы один коктейль');
         }
     });
+
+    // Сортировка по умолчанию: А → Я
+    sortCocktails('name_asc');
 </script>
 {% endblock %}

@@ -61,7 +61,10 @@ async def index(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"cocktails": db.cocktails},
+        context={
+            "cocktails": db.cocktails,
+            "cocktail_categories": db.cocktail_categories,
+        },
     )
 
 
@@ -90,7 +93,10 @@ async def menu(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="menu.html",
-        context={"cocktails": db.cocktails},
+        context={
+            "cocktails": db.cocktails,
+            "cocktail_categories": db.cocktail_categories,
+        },
     )
 
 

@@ -38,6 +38,7 @@ def load_database() -> Database:
         bottle_volumes=data["bottle_volumes"],
         prices=data["prices"],
         ingredient_info=data.get("ingredient_info", {}),
+        cocktail_categories=data.get("cocktail_categories", []),
     )
 
 

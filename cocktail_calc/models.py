@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 
 
 @dataclass
@@ -27,3 +27,4 @@ class Database:
     bottle_volumes: Dict[str, float]
     prices: Dict[str, int]
     ingredient_info: Dict[str, Dict] = field(default_factory=dict)
+    cocktail_categories: List[str] = field(default_factory=list)

@@ -8,9 +8,9 @@
 <div class="filter-bar">
     <select id="categoryFilter" onchange="filterCocktails(this.value)">
         <option value="all">Все категории</option>
-        <option value="авторский">Авторский</option>
-        <option value="классический">Классический</option>
-        <option value="безалкогольный">Безалкогольный</option>
+        {% for category in cocktail_categories %}
+        <option value="{{ category }}">{{ category[:1]|upper }}{{ category[1:] }}</option>
+        {% endfor %}
     </select>
 </div>
 
