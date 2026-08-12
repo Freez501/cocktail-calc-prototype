@@ -446,8 +446,10 @@ def _unit_for_ingredient(ing: str, db: Optional[Database]) -> str:
     if ing.startswith(PF_PREFIX):
         return "л"
     unit = db.ingredient_info.get(ing, {}).get("unit") if db else None
-    if unit in ("г", "кг"):
+    if unit == "г":
         return "гр"
+    if unit == "кг":
+        return "кг"
     if unit == "шт":
         return "шт"
     if unit in ("л", "мл"):
