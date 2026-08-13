@@ -425,6 +425,31 @@
         font-size: 0.85rem;
         margin: 0;
     }
+    .kv-row.dragging {
+        opacity: 0.95;
+        border: 1px dashed #601203;
+        background: #fff8f0;
+        box-shadow: 0 4px 12px rgba(96, 18, 3, 0.15);
+        transform: scale(1.01);
+    }
+    .drag-handle {
+        cursor: grab;
+        color: #8a6b55;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 6px;
+        border-radius: 6px;
+        background: #f0e6d6;
+        transition: background 0.15s, color 0.15s;
+    }
+    .drag-handle:hover {
+        background: #e6d8c4;
+        color: #601203;
+    }
+    .drag-handle:active {
+        cursor: grabbing;
+    }
     .autocomplete-wrapper.has-pf-view .kv-key {
         padding-right: 36px;
     }
@@ -721,6 +746,20 @@
             if (oldKey in recipe) {
                 recipe[newKey] = recipe[oldKey];
                 delete recipe[oldKey];
+            }
+        }
+    }
+
+    // Переименовывает ссылку на ПФ во всех рецептах коктейлей
+    function renamePfInCocktails(oldKey, newKey) {
+        if (oldKey === newKey) return;
+        const oldRef = '(ПФ) ' + oldKey;
+        const newRef = '(ПФ) ' + newKey;
+        for (const cocktail of Object.values(database.cocktails || {})) {
+            const recipe = cocktail.recipe || {};
+            if (oldRef in recipe) {
+                recipe[newRef] = recipe[oldRef];
+                delete recipe[oldRef];
             }
         }
     }
@@ -1034,7 +1073,9 @@
         for (let [key, cocktail] of entries) {
             const card = document.createElement('div');
             card.className = 'admin-card' + (cocktail.verified ? ' verified' : '');
-            const ings = Object.keys(cocktail.recipe || {}).join(', ');
+            const ings = Object.keys(cocktail.recipe || {})
+                .map(k => getDisplayName(k))
+                .join(', ');
             const options = getCocktailCategoryOptions();
             const cat = cocktail.category ? ` — ${options[cocktail.category] || cocktail.category}` : '';
             const star = document.createElement('span');
@@ -1067,7 +1108,7 @@
         const cocktail = key ? database.cocktails[key] : { name: '', category: '', recipe: {}, decorations: {}, glassware: {} };
         document.getElementById('cocktailModalTitle').textContent = key ? 'Редактировать коктейль' : 'Новый коктейль';
         document.getElementById('cocktailKey').value = key || '';
-        document.getElementById('cocktailKey').disabled = !!key;
+        document.getElementById('cocktailKey').disabled = false;
         document.getElementById('cocktailName').value = cocktail.name || '';
         buildCocktailCategorySelect();
         document.getElementById('cocktailCategory').value = cocktail.category || '';
@@ -1124,6 +1165,9 @@
 
         if (!database.cocktails) database.cocktails = {};
         const verified = (currentCocktailKey && database.cocktails[currentCocktailKey]?.verified) || false;
+        if (currentCocktailKey && currentCocktailKey !== key) {
+            delete database.cocktails[currentCocktailKey];
+        }
         database.cocktails[key] = {
             name: name,
             category: category,
@@ -1156,7 +1200,9 @@
         for (let [key, pf] of Object.entries(database.semi_products || {})) {
             const card = document.createElement('div');
             card.className = 'admin-card';
-            const ings = Object.keys(pf.recipe || {}).join(', ');
+            const ings = Object.keys(pf.recipe || {})
+                .map(k => getDisplayName(k))
+                .join(', ');
             const unit = pf.unit || 'л';
             card.innerHTML = `
                 <h4>${pf.name}</h4>
@@ -1172,7 +1218,7 @@
         const pf = key ? database.semi_products[key] : { name: '', output_volume: 1, unit: 'л', recipe: {} };
         document.getElementById('pfModalTitle').textContent = key ? 'Редактировать ПФ' : 'Новый ПФ';
         document.getElementById('pfKey').value = key || '';
-        document.getElementById('pfKey').disabled = !!key;
+        document.getElementById('pfKey').disabled = false;
         document.getElementById('pfName').value = normalizePfName(pf.name || '');
         document.getElementById('pfOutput').value = pf.output_volume || 1;
         document.getElementById('pfUnit').value = pf.unit || 'л';
@@ -1205,6 +1251,10 @@
             }
         }
         if (!database.semi_products) database.semi_products = {};
+        if (currentPfKey && currentPfKey !== key) {
+            delete database.semi_products[currentPfKey];
+            renamePfInCocktails(currentPfKey, key);
+        }
         database.semi_products[key] = {
             name: name,
             output_volume: output,
@@ -1532,7 +1582,6 @@
             card.className = 'admin-card';
             card.innerHTML = `
                 <h4>${escapeHtml(item.display_name || item.key)}</h4>
-                <small>${escapeHtml(item.key)}</small>
             `;
             card.onclick = () => openGlasswareModal(item.key);
             list.appendChild(card);
@@ -1658,6 +1707,41 @@
         }
     }
 
+    let dragSrcRow = null;
+
+    function handleDragStart(e) {
+        dragSrcRow = this;
+        e.dataTransfer.effectAllowed = 'move';
+        this.classList.add('dragging');
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+        if (dragSrcRow && dragSrcRow !== this && dragSrcRow.parentNode === this.parentNode) {
+            const container = this.parentNode;
+            const rows = Array.from(container.children);
+            const srcIndex = rows.indexOf(dragSrcRow);
+            const targetIndex = rows.indexOf(this);
+            if (srcIndex < targetIndex) {
+                container.insertBefore(dragSrcRow, this.nextSibling);
+            } else {
+                container.insertBefore(dragSrcRow, this);
+            }
+        }
+        return false;
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        dragSrcRow = null;
+    }
+
     function addKvRow(containerId, key = '', value = '', unit = null, displayName = null, items = null) {
         const container = document.getElementById(containerId);
         const row = document.createElement('div');
@@ -1684,12 +1768,28 @@
             ? `<select class="kv-unit">${buildUnitOptions(unit || defaultUnit)}</select>`
             : '';
         row.innerHTML = `
+            <span class="drag-handle" title="Перетащить">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <circle cx="9" cy="6" r="2"/>
+                    <circle cx="15" cy="6" r="2"/>
+                    <circle cx="9" cy="12" r="2"/>
+                    <circle cx="15" cy="12" r="2"/>
+                    <circle cx="9" cy="18" r="2"/>
+                    <circle cx="15" cy="18" r="2"/>
+                </svg>
+            </span>
             ${keyInput}
             <input type="text" class="kv-value ${isDecor || isGlass ? '' : 'amount'}" placeholder="${isDecor || isGlass ? 'кол-во' : 'количество'}" value="${value}">
             ${unitSelect}
             <button type="button" class="button secondary small" onclick="this.parentElement.remove()">×</button>
         `;
         container.appendChild(row);
+
+        row.draggable = true;
+        row.addEventListener('dragstart', handleDragStart);
+        row.addEventListener('dragover', handleDragOver);
+        row.addEventListener('drop', handleDrop);
+        row.addEventListener('dragend', handleDragEnd);
 
         if (useAutocomplete) {
             const wrapper = row.querySelector('.autocomplete-wrapper');

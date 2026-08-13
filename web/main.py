@@ -115,7 +115,7 @@ async def export_txt(order: str = Query(...)):
     if not parsed:
         raise HTTPException(status_code=400, detail="Не удалось распознать заказ")
     result = calculate_shopping_list(parsed, prices, db)
-    report = generate_txt_report(result)
+    report = generate_txt_report(result, db)
     filename = f"cocktail_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     return PlainTextResponse(
         content=report,

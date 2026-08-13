@@ -219,7 +219,7 @@ async def export_txt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Результат не найден.")
         return
 
-    report = generate_txt_report(result)
+    report = generate_txt_report(result, db)
     filename = f"cocktail_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     filepath = os.path.join(DATA_DIR, filename)
 

@@ -397,12 +397,13 @@ def format_report(result: Dict, db: Optional[Database] = None) -> str:
         lines.append(f"▸ {detail['name']} × {detail['count']}:")
         for ing, amount in detail["ingredients"].items():
             unit = _unit_for_ingredient(ing, db)
+            display = _display_name(ing, db)
             if unit == "л":
-                lines.append(f"   {ing}: {amount:.3f} л")
+                lines.append(f"   {display}: {amount:.3f} л")
             elif unit == "кг":
-                lines.append(f"   {ing}: {amount:.2f} кг")
+                lines.append(f"   {display}: {amount:.2f} кг")
             else:
-                lines.append(f"   {ing}: {math.ceil(amount)} {unit}")
+                lines.append(f"   {display}: {math.ceil(amount)} {unit}")
         lines.append("")
 
     lines.append("─" * 50)
@@ -411,27 +412,29 @@ def format_report(result: Dict, db: Optional[Database] = None) -> str:
     if result["pf_to_make"]:
         lines.append("🔧 ПОЛУФАБРИКАТЫ (нужно приготовить):")
         for pf, amount in result["pf_to_make"].items():
-            lines.append(f"   • (ПФ) {pf.title()}: {amount:.3f} л")
+            display = _display_name(f"{PF_PREFIX}{pf}", db)
+            lines.append(f"   • {display}: {amount:.3f} л")
         lines.append("")
 
     lines.append("─" * 50)
     lines.append("")
 
-    _append_section(lines, "🥃 АЛКОГОЛЬ (закупить):", result["alcohol"], "л", "бут.")
-    _append_section_liters(lines, "🥤 Б/А — БЕЗАЛКОГОЛЬНОЕ (закупить):", result["non_alcohol"])
-    _append_section(lines, "🧪 СИРОПЫ (закупить):", result["syrups"], "л", "бут.")
-    _append_section_liters(lines, "🍑 ПЮРЕ (закупить):", result["puree"])
-    _append_section_liters(lines, "🧃 КОНЦЕНТРАТЫ (закупить):", result["concentrate"])
-    _append_section_grams(lines, "🧂 СУХИЕ ИНГРЕДИЕНТЫ (закупить):", result["dry_gr"])
-    _append_section_liters(lines, "🧊 ЛЁД КУБИКОВЫЙ (закупить):", result["ice_cube"], unit="кг")
-    _append_section_pcs(lines, "🧊 ЛЁД ФИГУРНЫЙ (закупить):", result["ice_figurine"])
-    _append_section_pcs(lines, "🍒 УКРАШЕНИЯ (шт):", result["decorations_pcs"])
-    _append_section_grams(lines, "🧂 УКРАШЕНИЯ (гр):", result["decorations_gr"])
+    _append_section(lines, "🥃 АЛКОГОЛЬ (закупить):", result["alcohol"], db, "л", "бут.")
+    _append_section_liters(lines, "🥤 Б/А — БЕЗАЛКОГОЛЬНОЕ (закупить):", result["non_alcohol"], db)
+    _append_section(lines, "🧪 СИРОПЫ (закупить):", result["syrups"], db, "л", "бут.")
+    _append_section_liters(lines, "🍑 ПЮРЕ (закупить):", result["puree"], db)
+    _append_section_liters(lines, "🧃 КОНЦЕНТРАТЫ (закупить):", result["concentrate"], db)
+    _append_section_grams(lines, "🧂 СУХИЕ ИНГРЕДИЕНТЫ (закупить):", result["dry_gr"], db)
+    _append_section_liters(lines, "🧊 ЛЁД КУБИКОВЫЙ (закупить):", result["ice_cube"], db, unit="кг")
+    _append_section_pcs(lines, "🧊 ЛЁД ФИГУРНЫЙ (закупить):", result["ice_figurine"], db)
+    _append_section_pcs(lines, "🍒 УКРАШЕНИЯ (шт):", result["decorations_pcs"], db)
+    _append_section_grams(lines, "🧂 УКРАШЕНИЯ (гр):", result["decorations_gr"], db)
 
     if result["glassware"]:
         lines.append("🍷 ПОСУДА:")
         for glass, count in sorted(result["glassware"].items()):
-            lines.append(f"   • {glass.title()}: {math.ceil(count)} шт")
+            display = _display_name(glass, db)
+            lines.append(f"   • {display}: {math.ceil(count)} шт")
         lines.append("")
 
     lines.append("═" * 50)
@@ -439,6 +442,22 @@ def format_report(result: Dict, db: Optional[Database] = None) -> str:
     lines.append("═" * 50)
 
     return "\n".join(lines)
+
+
+def _display_name(ing: str, db: Optional[Database]) -> str:
+    """Возвращает читаемое название ингредиента по ключу."""
+    if not db:
+        return ing.title()
+    if ing.startswith(PF_PREFIX):
+        pf_key = ing[len(PF_PREFIX):].strip()
+        pf = db.semi_products.get(pf_key)
+        if pf:
+            return pf.name
+    info = db.ingredient_info.get(ing, {})
+    display_name = info.get("display_name")
+    if display_name:
+        return display_name
+    return ing.title()
 
 
 def _unit_for_ingredient(ing: str, db: Optional[Database]) -> str:
@@ -471,49 +490,53 @@ def _unit_for_ingredient(ing: str, db: Optional[Database]) -> str:
     return unit_map.get(category, "л")
 
 
-def _append_section(lines: List[str], title: str, items: Dict, unit: str, bottle_label: str):
+def _append_section(lines: List[str], title: str, items: Dict, db: Optional[Database], unit: str, bottle_label: str):
     if not items:
         return
     lines.append(title)
     for ing, data in sorted(items.items()):
+        display = _display_name(ing, db)
         lines.append(
-            f"   • {ing.title()}: {data['liters']:.3f} {unit} "
+            f"   • {display}: {data['liters']:.3f} {unit} "
             f"({data['bottles']} {bottle_label} × {data['bottle_vol']} {unit}) — {data['cost']} ₽"
         )
     lines.append("")
 
 
-def _append_section_liters(lines: List[str], title: str, items: Dict, unit: str = "л"):
+def _append_section_liters(lines: List[str], title: str, items: Dict, db: Optional[Database], unit: str = "л"):
     if not items:
         return
     lines.append(title)
     for ing, data in sorted(items.items()):
+        display = _display_name(ing, db)
         cost_str = f" — {data['cost']} ₽" if data["cost"] > 0 else ""
-        lines.append(f"   • {ing.title()}: {data['liters']:.3f} {unit}{cost_str}")
+        lines.append(f"   • {display}: {data['liters']:.3f} {unit}{cost_str}")
     lines.append("")
 
 
-def _append_section_pcs(lines: List[str], title: str, items: Dict):
+def _append_section_pcs(lines: List[str], title: str, items: Dict, db: Optional[Database]):
     if not items:
         return
     lines.append(title)
     for ing, data in sorted(items.items()):
+        display = _display_name(ing, db)
         cost_str = f" — {data['cost']} ₽" if data["cost"] > 0 else ""
-        lines.append(f"   • {ing.title()}: {data['pcs']} шт{cost_str}")
+        lines.append(f"   • {display}: {data['pcs']} шт{cost_str}")
     lines.append("")
 
 
-def _append_section_grams(lines: List[str], title: str, items: Dict):
+def _append_section_grams(lines: List[str], title: str, items: Dict, db: Optional[Database]):
     if not items:
         return
     lines.append(title)
     for ing, data in sorted(items.items()):
+        display = _display_name(ing, db)
         cost_str = f" — {data['cost']} ₽" if data["cost"] > 0 else ""
-        lines.append(f"   • {ing.title()}: {data['gr']} гр{cost_str}")
+        lines.append(f"   • {display}: {data['gr']} гр{cost_str}")
     lines.append("")
 
 
-def generate_txt_report(result: Dict) -> str:
+def generate_txt_report(result: Dict, db: Optional[Database] = None) -> str:
     """Генерирует TXT отчёт для экспорта."""
     lines = []
     lines.append("=" * 60)
@@ -536,14 +559,16 @@ def generate_txt_report(result: Dict) -> str:
     for detail in result["detailed_calc"]:
         lines.append(f"\n{detail['name']} × {detail['count']}:")
         for ing, amount in detail["ingredients"].items():
-            lines.append(f"  {ing}: {amount:.4f}")
+            display = _display_name(ing, db)
+            lines.append(f"  {display}: {amount:.4f}")
 
     lines.append("\n" + "-" * 60)
 
     if result["pf_to_make"]:
         lines.append("\nПФ ДЛЯ ПРИГОТОВЛЕНИЯ:")
         for pf, amount in result["pf_to_make"].items():
-            lines.append(f"  (ПФ) {pf}: {amount:.3f} л")
+            display = _display_name(f"{PF_PREFIX}{pf}", db)
+            lines.append(f"  {display}: {amount:.3f} л")
 
     sections = [
         ("\nАЛКОГОЛЬ:", result["alcohol"], "л", "бут."),
@@ -563,21 +588,23 @@ def generate_txt_report(result: Dict) -> str:
             continue
         lines.append(title)
         for ing, data in sorted(items.items()):
+            display = _display_name(ing, db)
             if "bottles" in data:
                 lines.append(
-                    f"  {ing}: {data['liters']:.3f} {unit} ({data['bottles']} бут.) — {data['cost']} ₽"
+                    f"  {display}: {data['liters']:.3f} {unit} ({data['bottles']} бут.) — {data['cost']} ₽"
                 )
             elif "pcs" in data:
-                lines.append(f"  {ing}: {data['pcs']} {unit} — {data['cost']} ₽")
+                lines.append(f"  {display}: {data['pcs']} {unit} — {data['cost']} ₽")
             elif "gr" in data:
-                lines.append(f"  {ing}: {data['gr']} {unit} — {data['cost']} ₽")
+                lines.append(f"  {display}: {data['gr']} {unit} — {data['cost']} ₽")
             else:
-                lines.append(f"  {ing}: {data['liters']:.3f} {unit} — {data['cost']} ₽")
+                lines.append(f"  {display}: {data['liters']:.3f} {unit} — {data['cost']} ₽")
 
     if result["glassware"]:
         lines.append("\nПОСУДА:")
         for glass, count in sorted(result["glassware"].items()):
-            lines.append(f"  {glass}: {math.ceil(count)} шт")
+            display = _display_name(glass, db)
+            lines.append(f"  {display}: {math.ceil(count)} шт")
 
     lines.append("\n" + "=" * 60)
     lines.append(f"ИТОГО: {result['total_cost']} ₽")
