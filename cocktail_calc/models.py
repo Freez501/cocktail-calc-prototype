@@ -17,6 +17,7 @@ class Cocktail:
     decorations: Dict[str, float] = field(default_factory=dict)
     glassware: Dict[str, float] = field(default_factory=dict)
     category: str = ""
+    verified: bool = False
 
 
 @dataclass

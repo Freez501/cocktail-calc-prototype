@@ -27,6 +27,7 @@ def load_database() -> Database:
             decorations=value.get("decorations", {}),
             glassware=value.get("glassware", {}),
             category=value.get("category", ""),
+            verified=value.get("verified", False),
         )
         for key, value in data["cocktails"].items()
     }

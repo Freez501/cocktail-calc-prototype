@@ -298,6 +298,17 @@
     .admin-card small {
         color: #8a6b55;
     }
+    .admin-card.verified {
+        border-left: 4px solid #4caf50;
+    }
+    .verified-toggle {
+        cursor: pointer;
+        margin-right: 6px;
+        user-select: none;
+    }
+    .admin-card.verified .verified-toggle {
+        color: #4caf50;
+    }
     .admin-actions {
         position: sticky;
         bottom: 0;
@@ -792,6 +803,10 @@
         const select = document.getElementById('cocktailCategory');
         const current = select.value;
         select.innerHTML = '';
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '— без категории —';
+        select.appendChild(emptyOption);
         const options = getCocktailCategoryOptions();
         const cats = Object.keys(options).length ? Object.entries(options) : [['авторский', 'Авторский']];
         for (let [key, label] of cats.sort((a, b) => a[1].localeCompare(b[1]))) {
@@ -1018,17 +1033,33 @@
         });
         for (let [key, cocktail] of entries) {
             const card = document.createElement('div');
-            card.className = 'admin-card';
+            card.className = 'admin-card' + (cocktail.verified ? ' verified' : '');
             const ings = Object.keys(cocktail.recipe || {}).join(', ');
             const options = getCocktailCategoryOptions();
             const cat = cocktail.category ? ` — ${options[cocktail.category] || cocktail.category}` : '';
+            const star = document.createElement('span');
+            star.className = 'verified-toggle';
+            star.textContent = cocktail.verified ? '★' : '☆';
+            star.title = cocktail.verified ? 'Проверено' : 'Не проверено';
+            star.onclick = (e) => { e.stopPropagation(); toggleCocktailVerified(key); };
+            const h4 = document.createElement('h4');
+            h4.appendChild(star);
+            h4.appendChild(document.createTextNode(' ' + (cocktail.name || key)));
             card.innerHTML = `
-                <h4>${cocktail.name}</h4>
                 <small>${ings}${cat}</small>
             `;
+            card.prepend(h4);
             card.onclick = () => openCocktailModal(key);
             list.appendChild(card);
         }
+    }
+
+    function toggleCocktailVerified(key) {
+        const cocktail = database.cocktails?.[key];
+        if (!cocktail) return;
+        cocktail.verified = !cocktail.verified;
+        markDirty();
+        renderCocktails();
     }
 
     function openCocktailModal(key = null) {
@@ -1039,8 +1070,7 @@
         document.getElementById('cocktailKey').disabled = !!key;
         document.getElementById('cocktailName').value = cocktail.name || '';
         buildCocktailCategorySelect();
-        const defaultCategory = database.cocktail_categories?.[0] || 'авторский';
-        document.getElementById('cocktailCategory').value = cocktail.category || defaultCategory;
+        document.getElementById('cocktailCategory').value = cocktail.category || '';
         const iceKeys = new Set(iceItems.map(i => i.key));
         const recipeWithoutIce = {};
         const iceRecipe = {};
@@ -1093,12 +1123,14 @@
         }
 
         if (!database.cocktails) database.cocktails = {};
+        const verified = (currentCocktailKey && database.cocktails[currentCocktailKey]?.verified) || false;
         database.cocktails[key] = {
             name: name,
             category: category,
             recipe: {...recipe, ...ice},
             decorations: decorations,
             glassware: glassware,
+            verified: verified,
         };
         currentCocktailKey = key;
         markDirty();
