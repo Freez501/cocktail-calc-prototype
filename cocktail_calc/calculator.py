@@ -1,4 +1,5 @@
 import math
+import os
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -379,8 +380,12 @@ def format_report(result: Dict, db: Optional[Database] = None) -> str:
     lines.append("")
 
     lines.append("📋 ЗАКАЗ:")
+    total_cocktails = 0
     for name, count in result["found_cocktails"]:
         lines.append(f"   • {name} — {count} шт.")
+        total_cocktails += count
+    if result["found_cocktails"]:
+        lines.append(f"   Итого: {total_cocktails} шт.")
     if result["unknown"]:
         lines.append("")
         lines.append(f"⚠️  Не найдены коктейли: {', '.join(result['unknown'])}")
@@ -611,3 +616,167 @@ def generate_txt_report(result: Dict, db: Optional[Database] = None) -> str:
     lines.append("=" * 60)
 
     return "\n".join(lines)
+
+
+def _find_pdf_font() -> str:
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return ""
+
+
+def generate_pdf_report(result: Dict, db: Optional[Database] = None) -> bytes:
+    """Генерирует PDF отчёт для экспорта."""
+    from fpdf import FPDF
+
+    font_path = _find_pdf_font()
+    if not font_path:
+        raise RuntimeError("Не найден TTF-шрифт с поддержкой кириллицы для PDF")
+
+    font_dir = os.path.dirname(font_path)
+    bold_candidates = [
+        os.path.join(font_dir, "DejaVuSans-Bold.ttf"),
+        os.path.join(font_dir, "LiberationSans-Bold.ttf"),
+        os.path.join(font_dir, "arialbd.ttf"),
+        os.path.join(font_dir, "calibrib.ttf"),
+    ]
+    bold_path = font_path
+    for cand in bold_candidates:
+        if os.path.exists(cand):
+            bold_path = cand
+            break
+
+    class ReportPDF(FPDF):
+        def header(self):
+            self.set_font("ReportFont", "B", 14)
+            self.set_text_color(29, 29, 31)
+            self.cell(0, 10, "Отчёт по закупкам коктейлей", ln=True, align="C")
+            self.set_font("ReportFont", "", 9)
+            self.set_text_color(110, 110, 115)
+            self.cell(0, 6, f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}", ln=True, align="C")
+            self.ln(4)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("ReportFont", "", 8)
+            self.set_text_color(110, 110, 115)
+            self.cell(0, 10, f"Стр. {self.page_no()}", align="C")
+
+    pdf = ReportPDF()
+    pdf.add_font("ReportFont", "", font_path, uni=True)
+    pdf.add_font("ReportFont", "B", bold_path, uni=True)
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    def _section_title(title):
+        pdf.set_font("ReportFont", "B", 11)
+        pdf.set_text_color(96, 18, 3)
+        pdf.cell(0, 8, title, ln=True)
+
+    def _row(cells, widths, bold=False, fill=None):
+        pdf.set_font("ReportFont", "B" if bold else "", 9)
+        for i, cell in enumerate(cells):
+            if fill:
+                pdf.set_fill_color(*fill)
+                pdf.cell(widths[i], 6, str(cell), border=0, fill=True)
+            else:
+                pdf.cell(widths[i], 6, str(cell), border="B")
+        pdf.ln()
+
+    widths = [90, 30, 30, 40]
+
+    pdf.set_font("ReportFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Заказ", ln=True)
+    pdf.set_font("ReportFont", "", 10)
+    pdf.set_text_color(29, 29, 31)
+    total_cocktails = 0
+    for name, count in result["found_cocktails"]:
+        pdf.cell(0, 6, f"{name} — {count} шт.", ln=True)
+        total_cocktails += count
+    if result["found_cocktails"]:
+        pdf.set_font("ReportFont", "B", 10)
+        pdf.cell(0, 7, f"Итого коктейлей: {total_cocktails} шт.", ln=True)
+    if result["unknown"]:
+        pdf.set_text_color(255, 59, 48)
+        pdf.cell(0, 6, f"Не найдены: {', '.join(result['unknown'])}", ln=True)
+    if result.get("unknown_pf"):
+        pdf.set_text_color(255, 59, 48)
+        pdf.cell(0, 6, f"Неизвестные ПФ: {', '.join(result['unknown_pf'])}", ln=True)
+    pdf.ln(4)
+
+    if result["detailed_calc"]:
+        _section_title("Детальный расчёт по коктейлям")
+        for detail in result["detailed_calc"]:
+            pdf.set_font("ReportFont", "B", 10)
+            pdf.set_text_color(96, 18, 3)
+            pdf.cell(0, 6, f"{detail['name']} × {detail['count']}", ln=True)
+            pdf.set_font("ReportFont", "", 9)
+            pdf.set_text_color(29, 29, 31)
+            for ing, amount in detail["ingredients"].items():
+                unit = _unit_for_ingredient(ing, db)
+                display = _display_name(ing, db)
+                if unit == "л":
+                    pdf.cell(0, 5, f"  {display}: {amount:.3f} л", ln=True)
+                elif unit == "кг":
+                    pdf.cell(0, 5, f"  {display}: {amount:.2f} кг", ln=True)
+                else:
+                    pdf.cell(0, 5, f"  {display}: {math.ceil(amount)} {unit}", ln=True)
+            pdf.ln(2)
+
+    if result["pf_to_make"]:
+        _section_title("Полуфабрикаты")
+        for pf, amount in result["pf_to_make"].items():
+            display = _display_name(f"{PF_PREFIX}{pf}", db)
+            pdf.set_font("ReportFont", "", 10)
+            pdf.cell(0, 6, f"{display}: {amount:.3f} л", ln=True)
+        pdf.ln(2)
+
+    def _table_section(title, items, value_key, unit):
+        if not items:
+            return
+        _section_title(title)
+        _row(["Ингредиент", "Количество", "", "Стоимость"], widths, bold=True, fill=(245, 245, 247))
+        pdf.set_text_color(29, 29, 31)
+        for ing, data in sorted(items.items()):
+            display = _display_name(ing, db)
+            value = data.get(value_key, "")
+            cost = data.get("cost", 0)
+            _row([display, f"{value} {unit}" if value != "" else "", "", f"{cost} ₽"], widths)
+        pdf.ln(2)
+
+    sections = [
+        ("Алкоголь", result["alcohol"], "bottles", "бут."),
+        ("Б/А", result["non_alcohol"], "liters", "л"),
+        ("Сиропы", result["syrups"], "bottles", "бут."),
+        ("Пюре", result["puree"], "liters", "л"),
+        ("Концентраты", result["concentrate"], "liters", "л"),
+        ("Сухие ингредиенты", result["dry_gr"], "gr", "гр"),
+        ("Лёд кубиковый", result["ice_cube"], "liters", "кг"),
+        ("Лёд фигурный", result["ice_figurine"], "pcs", "шт"),
+        ("Украшения (шт)", result["decorations_pcs"], "pcs", "шт"),
+        ("Украшения (гр)", result["decorations_gr"], "gr", "гр"),
+    ]
+    for title, items, value_key, unit in sections:
+        _table_section(title, items, value_key, unit)
+
+    if result["glassware"]:
+        _section_title("Посуда")
+        pdf.set_font("ReportFont", "", 10)
+        for glass, count in sorted(result["glassware"].items()):
+            display = _display_name(glass, db)
+            pdf.cell(0, 6, f"{display}: {math.ceil(count)} шт", ln=True)
+        pdf.ln(2)
+
+    pdf.set_font("ReportFont", "B", 12)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 10, f"ИТОГО: {result['total_cost']} ₽", ln=True)
+
+    pdf_bytes = pdf.output(dest="S")
+    return bytes(pdf_bytes) if isinstance(pdf_bytes, bytearray) else pdf_bytes

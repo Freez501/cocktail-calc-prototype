@@ -6,31 +6,42 @@
 <h2>📋 Доступные коктейли</h2>
 
 <div class="filter-bar">
-    <select id="categoryFilter" onchange="filterCocktails(this.value)">
+    <input type="search" id="searchInput" placeholder="Поиск по названию..." oninput="filterMenu()">
+    <select id="categoryFilter" onchange="filterMenu()">
         <option value="all">Все категории</option>
         {% for category in cocktail_categories %}
         <option value="{{ category }}">{{ category[:1]|upper }}{{ category[1:] }}</option>
         {% endfor %}
     </select>
+    <select id="sortFilter" onchange="sortMenu()">
+        <option value="name_asc" selected>А → Я</option>
+        <option value="name_desc">Я → А</option>
+    </select>
 </div>
 
-<ul class="menu-list">
+<div class="cocktail-grid menu-grid" id="menuGrid">
     {% for key, cocktail in cocktails.items() %}
-    <li data-category="{{ cocktail.category }}">
-        <strong>{{ cocktail.name }}</strong><br>
-        <small>
+    <div class="menu-card" data-category="{{ cocktail.category }}" data-name="{{ cocktail.name }}">
+        <div class="menu-card-category">{{ cocktail.category[:1]|upper }}{{ cocktail.category[1:] }}</div>
+        <h3>{{ cocktail.name }}</h3>
+        <p class="menu-card-ingredients">
             {% for ing in cocktail.recipe.keys() if not ing.startswith('(ПФ)') %}
                 {{ ing }}{% if not loop.last %}, {% endif %}
             {% endfor %}
-        </small>
-    </li>
+        </p>
+    </div>
     {% endfor %}
-</ul>
+</div>
 
 <style>
     .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
         margin-bottom: 16px;
+        align-items: center;
     }
+    .filter-bar input,
     .filter-bar select {
         appearance: none;
         -webkit-appearance: none;
@@ -47,29 +58,84 @@
         background-repeat: no-repeat;
         background-position: right 14px center;
     }
+    .filter-bar input {
+        cursor: text;
+        background-image: none;
+    }
     .filter-bar select:hover {
         background-color: #601203;
         color: #f0e5d1;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
     }
-    .filter-bar select:focus {
+    .filter-bar select:focus,
+    .filter-bar input:focus {
         outline: none;
     }
-    .menu-list li.hidden {
+    .menu-card {
+        background: #f7f1e6;
+        border: 1px solid #d8c9b0;
+        border-radius: 12px;
+        padding: 16px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .menu-card:hover {
+        border-color: #601203;
+        box-shadow: 0 2px 8px rgba(96, 18, 3, 0.12);
+    }
+    .menu-card.hidden {
         display: none;
+    }
+    .menu-card h3 {
+        margin: 0 0 8px;
+        font-size: 1.1rem;
+        color: #601203;
+    }
+    .menu-card-category {
+        font-size: 0.75rem;
+        color: #8a6b55;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
+    }
+    .menu-card-ingredients {
+        margin: 0;
+        color: #6e6e73;
+        font-size: 0.9rem;
+        line-height: 1.4;
     }
 </style>
 
 <script>
-    function filterCocktails(category) {
-        document.querySelectorAll('.menu-list li').forEach(item => {
-            if (category === 'all' || item.dataset.category === category) {
-                item.classList.remove('hidden');
+    function filterMenu() {
+        const category = document.getElementById('categoryFilter').value;
+        const term = document.getElementById('searchInput').value.toLowerCase().trim();
+        document.querySelectorAll('.menu-card').forEach(card => {
+            const name = card.dataset.name.toLowerCase();
+            const matchesCategory = category === 'all' || card.dataset.category === category;
+            const matchesSearch = !term || name.includes(term);
+            if (matchesCategory && matchesSearch) {
+                card.classList.remove('hidden');
             } else {
-                item.classList.add('hidden');
+                card.classList.add('hidden');
             }
         });
     }
+
+    function sortMenu() {
+        const grid = document.getElementById('menuGrid');
+        const cards = Array.from(grid.children);
+        const mode = document.getElementById('sortFilter').value;
+        cards.sort((a, b) => {
+            const na = a.dataset.name.trim();
+            const nb = b.dataset.name.trim();
+            return mode === 'name_desc'
+                ? nb.localeCompare(na, 'ru')
+                : na.localeCompare(nb, 'ru');
+        });
+        cards.forEach(card => grid.appendChild(card));
+    }
+
+    sortMenu();
 </script>
 
 <div class="report-actions">

@@ -26,6 +26,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from cocktail_calc.calculator import (
     calculate_shopping_list,
     format_report,
+    generate_pdf_report,
     generate_txt_report,
     parse_order,
 )
@@ -120,6 +121,21 @@ async def export_txt(order: str = Query(...)):
     return PlainTextResponse(
         content=report,
         media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.get("/export/pdf")
+async def export_pdf(order: str = Query(...)):
+    parsed = parse_order(unquote_plus(order))
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Не удалось распознать заказ")
+    result = calculate_shopping_list(parsed, prices, db)
+    pdf_bytes = generate_pdf_report(result, db)
+    filename = f"cocktail_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 

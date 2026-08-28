@@ -10,7 +10,8 @@
     <input type="hidden" name="order" id="order" value="">
 
     <div class="filter-bar">
-        <select id="categoryFilter" onchange="filterCocktails(this.value)">
+        <input type="search" id="searchInput" placeholder="Поиск по названию..." oninput="filterCocktails()">
+        <select id="categoryFilter" onchange="filterCocktails()">
             <option value="all">Все категории</option>
             {% for category in cocktail_categories %}
             <option value="{{ category }}">{{ category[:1]|upper }}{{ category[1:] }}</option>
@@ -43,7 +44,9 @@
         flex-wrap: wrap;
         gap: 12px;
         margin-bottom: 16px;
+        align-items: center;
     }
+        .filter-bar input,
         .filter-bar select {
             appearance: none;
             -webkit-appearance: none;
@@ -60,12 +63,17 @@
             background-repeat: no-repeat;
             background-position: right 14px center;
         }
+        .filter-bar input {
+            cursor: text;
+            background-image: none;
+        }
         .filter-bar select:hover {
             background-color: #601203;
             color: #f0e5d1;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
         }
-        .filter-bar select:focus {
+        .filter-bar select:focus,
+        .filter-bar input:focus {
             outline: none;
         }
         .cocktail-card.hidden {
@@ -95,9 +103,14 @@
 </style>
 
 <script>
-    function filterCocktails(category) {
+    function filterCocktails() {
+        const category = document.getElementById('categoryFilter').value;
+        const term = document.getElementById('searchInput').value.toLowerCase().trim();
         document.querySelectorAll('.cocktail-card').forEach(card => {
-            if (category === 'all' || card.dataset.category === category) {
+            const name = card.querySelector('.cocktail-name').textContent.toLowerCase();
+            const matchesCategory = category === 'all' || card.dataset.category === category;
+            const matchesSearch = !term || name.includes(term);
+            if (matchesCategory && matchesSearch) {
                 card.classList.remove('hidden');
             } else {
                 card.classList.add('hidden');
