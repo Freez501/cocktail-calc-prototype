@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}CRM — События{% endblock %}
+
+{% block content %}
+<h2>🗓 CRM мероприятий</h2>
+
+<div class="report-actions">
+    <a href="/events/new" class="button">+ Новое мероприятие</a>
+</div>
+
+{% if events %}
+<div class="event-list">
+    {% for event in events %}
+    <a href="/events/{{ event.id }}" class="event-card">
+        <div class="event-title">{{ event.title }}</div>
+        <div class="event-meta">
+            <span>📅 {{ event.date or '—' }}</span>
+            <span>👤 {{ event.client or '—' }}</span>
+            <span>📍 {{ event.address or '—' }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="hint">Пока нет мероприятий. Создайте первое.</p>
+{% endif %}
+
+<style>
+    .event-list {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+    }
+    .event-card {
+        display: block;
+        background: #f7f1e6;
+        border: 1px solid #d8c9b0;
+        border-radius: 12px;
+        padding: 18px;
+        text-decoration: none;
+        color: #601203;
+        transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .event-card:hover {
+        border-color: #601203;
+        box-shadow: 0 2px 10px rgba(96, 18, 3, 0.12);
+        background: #fff8ea;
+    }
+    .event-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    .event-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 0.9rem;
+        color: #6e6e73;
+    }
+</style>
+{% endblock %}

@@ -25,5 +25,8 @@ Thumbs.db
 # Project auto-generated backups
 data/backups/
 
+# CRM events data
+data/events.json
+
 # Logs
 *.log

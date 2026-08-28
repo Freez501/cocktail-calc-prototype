@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Редактировать' if event else 'Новое' }} мероприятие{% endblock %}
+
+{% block content %}
+<h2>{{ '✏️ Редактировать' if event else '📅 Новое' }} мероприятие</h2>
+
+<form id="eventForm" method="post" action="{{ '/events/' ~ event.id ~ '/edit' if event else '/events/new' }}">
+    <input type="hidden" name="cocktails_json" id="cocktailsJson" value="{{ cocktails_json or '{}' }}">
+
+    <section class="form-section">
+        <h3>Основное</h3>
+        <div class="form-grid two">
+            <label>
+                Название мероприятия
+                <input type="text" name="title" value="{{ event.title if event else '' }}" required>
+            </label>
+            <label>
+                Заказчик
+                <input type="text" name="client" value="{{ event.client if event else '' }}">
+            </label>
+            <label>
+                Количество барменов
+                <input type="number" name="bartenders_count" min="0" value="{{ event.bartenders_count if event else '1' }}">
+            </label>
+            <label>
+                Дата
+                <input type="date" name="date" value="{{ event.date if event else '' }}">
+            </label>
+            <label class="wide">
+                Адрес площадки
+                <input type="text" name="address" value="{{ event.address if event else '' }}">
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section">
+        <h3>Тайминг</h3>
+        <div class="form-grid four">
+            <label>
+                Выезд со склада
+                <input type="time" name="departure" value="{{ event.timings.departure if event and event.timings else '' }}">
+            </label>
+            <label>
+                Монтаж
+                <input type="time" name="setup" value="{{ event.timings.setup if event and event.timings else '' }}">
+            </label>
+            <label>
+                Начало
+                <input type="time" name="start" value="{{ event.timings.start if event and event.timings else '' }}">
+            </label>
+            <label>
+                Финал
+                <input type="time" name="end" value="{{ event.timings.end if event and event.timings else '' }}">
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section">
+        <h3>Контакты</h3>
+        <label>
+            Контакт менеджера
+            <input type="text" name="manager_contact" value="{{ event.manager_contact if event else '' }}">
+        </label>
+    </section>
+
+    <section class="form-section">
+        <h3>БАР</h3>
+        {% set bars = [('white_columns', 'Белый с колоннами'), ('white_no_columns', 'Белый без колонн'), ('black', 'Чёрный'), ('none', 'Нет')] %}
+        <div class="radio-group">
+            {% for val, label in bars %}
+            <label class="radio-card">
+                <input type="radio" name="bar" value="{{ val }}" {{ 'checked' if event and event.bar == val else ('checked' if not event and val == 'none' else '') }}>
+                <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <label>
+            Комментарий к бару
+            <input type="text" name="bar_comment" value="{{ event.bar_comment if event else '' }}">
+        </label>
+
+        {% set shelves = [('black_white', 'Чёрный с белыми полками'), ('gold_black', 'Золотой с чёрными полками'), ('none', 'Нет')] %}
+        <div class="radio-group">
+            {% for val, label in shelves %}
+            <label class="radio-card">
+                <input type="radio" name="shelf" value="{{ val }}" {{ 'checked' if event and event.shelf == val else ('checked' if not event and val == 'none' else '') }}>
+                <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <label>
+            Комментарий к стеллажу
+            <input type="text" name="shelf_comment" value="{{ event.shelf_comment if event else '' }}">
+        </label>
+
+        {% set pyramids = [('56', '56'), ('84', '84'), ('120', '120'), ('none', 'Нет')] %}
+        <div class="radio-group">
+            {% for val, label in pyramids %}
+            <label class="radio-card">
+                <input type="radio" name="pyramid" value="{{ val }}" {{ 'checked' if event and event.pyramid == val else ('checked' if not event and val == 'none' else '') }}>
+                <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <label>
+            Комментарий к пирамиде
+            <input type="text" name="pyramid_comment" value="{{ event.pyramid_comment if event else '' }}">
+        </label>
+    </section>
+
+    <section class="form-section">
+        <h3>Украшения</h3>
+        <div class="checkbox-grid">
+            {% for dec in decorations_list %}
+            <label class="check-card">
+                <input type="checkbox" name="decorations" value="{{ dec }}"
+                    {{ 'checked' if event and dec in event.decorations else '' }}>
+                <span>{{ dec[:1]|upper }}{{ dec[1:] }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <label>
+            Комментарий по украшениям
+            <textarea name="decorations_comment" rows="2">{{ event.decorations_comment if event else '' }}</textarea>
+        </label>
+    </section>
+
+    <section class="form-section">
+        <h3>Форма одежды</h3>
+        <label>
+            <input type="text" name="clothing" value="{{ event.clothing if event else '' }}" placeholder="Например, черный фартук, белая рубашка">
+        </label>
+    </section>
+
+    <section class="form-section">
+        <h3>Меню</h3>
+        <div class="radio-group">
+            <label class="radio-card">
+                <input type="radio" name="menu" value="us" {{ 'checked' if event and event.menu == 'us' else ('checked' if not event else '') }}>
+                <span>С нас</span>
+            </label>
+            <label class="radio-card">
+                <input type="radio" name="menu" value="client" {{ 'checked' if event and event.menu == 'client' else '' }}>
+                <span>С заказчика</span>
+            </label>
+        </div>
+    </section>
+
+    <section class="form-section">
+        <h3>Комментарий</h3>
+        <label>
+            Особые пожелания заказчика
+            <textarea name="comment" rows="3">{{ event.comment if event else '' }}</textarea>
+        </label>
+    </section>
+
+    <section class="form-section">
+        <h3>Коктейли</h3>
+        <div class="filter-bar">
+            <input type="search" id="searchInput" placeholder="Поиск по названию..." oninput="filterCocktails()">
+            <select id="categoryFilter" onchange="filterCocktails()">
+                <option value="all">Все категории</option>
+                {% for category in cocktail_categories %}
+                <option value="{{ category }}">{{ category[:1]|upper }}{{ category[1:] }}</option>
+                {% endfor %}
+            </select>
+            <select id="sortFilter" onchange="sortCocktails()">
+                <option value="name_asc" selected>А → Я</option>
+                <option value="name_desc">Я → А</option>
+            </select>
+        </div>
+
+        <div class="cocktail-grid" id="cocktailGrid">
+            {% for key, cocktail in cocktails.items() %}
+            <label class="cocktail-card" data-key="{{ key }}" data-category="{{ cocktail.category }}" data-name="{{ cocktail.name }}">
+                <span class="cocktail-name">{{ cocktail.name }}</span>
+                <button type="button" class="qty-btn minus" onclick="changeQty(this, -1); event.preventDefault();">−</button>
+                <input type="number" class="cocktail-qty" min="0" value="0" data-name="{{ cocktail.name }}" onchange="updateCard(this)" onclick="event.stopPropagation();">
+                <button type="button" class="qty-btn plus" onclick="changeQty(this, 1); event.preventDefault();">+</button>
+            </label>
+            {% endfor %}
+        </div>
+    </section>
+
+    <div class="report-actions">
+        <button type="submit">Сохранить</button>
+        <a href="/events" class="button secondary">Отмена</a>
+    </div>
+</form>
+
+<style>
+    .form-section {
+        margin-bottom: 28px;
+        padding-bottom: 22px;
+        border-bottom: 1px solid #e6d8c0;
+    }
+    .form-section h3 {
+        margin-bottom: 14px;
+        font-size: 1.1rem;
+    }
+    .form-grid {
+        display: grid;
+        gap: 14px;
+    }
+    .form-grid.two { grid-template-columns: repeat(2, 1fr); }
+    .form-grid.four { grid-template-columns: repeat(4, 1fr); }
+    .form-grid .wide { grid-column: 1 / -1; }
+    label {
+        font-weight: 600;
+    }
+    input[type="text"],
+    input[type="date"],
+    input[type="time"],
+    input[type="number"],
+    textarea,
+    select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #c9b89e;
+        border-radius: 10px;
+        font-family: inherit;
+        font-size: 1rem;
+        background: #fffdf8;
+        color: #601203;
+        margin-top: 6px;
+    }
+    input:focus,
+    textarea:focus,
+    select:focus {
+        outline: none;
+        border-color: #601203;
+    }
+    textarea { resize: vertical; }
+    .radio-group,
+    .checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .radio-card,
+    .check-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid #d8c9b0;
+        border-radius: 10px;
+        background: #f7f1e6;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+        font-weight: 500;
+    }
+    .radio-card:hover,
+    .check-card:hover {
+        border-color: #601203;
+        background: #fff8ea;
+    }
+    .radio-card input,
+    .check-card input {
+        width: 18px;
+        height: 18px;
+        accent-color: #601203;
+        cursor: pointer;
+    }
+    .filter-bar {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 12px;
+        margin-bottom: 16px;
+        align-items: baseline;
+    }
+    .filter-bar input,
+    .filter-bar select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: #f0e5d1;
+        color: #601203;
+        border: 1px solid #601203;
+        border-radius: 30px;
+        height: 40px;
+        padding: 0 16px;
+        margin: 0;
+        line-height: 38px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        min-width: 160px;
+        width: auto;
+        flex: 0 0 auto;
+        cursor: pointer;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23601203' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+    }
+    .filter-bar select {
+        padding-right: 36px;
+    }
+    .filter-bar input {
+        cursor: text;
+        background-image: none;
+    }
+    .filter-bar input::-webkit-search-decoration,
+    .filter-bar input::-webkit-search-cancel-button,
+    .filter-bar input::-webkit-search-results-button,
+    .filter-bar input::-webkit-search-results-decoration {
+        display: none;
+    }
+    .filter-bar select:hover {
+        background-color: #601203;
+        color: #f0e5d1;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f0e5d1' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+    }
+    .filter-bar select:focus,
+    .filter-bar input:focus { outline: none; }
+    .cocktail-card {
+        background: #f7f1e6;
+        min-width: 0;
+    }
+    .cocktail-card.hidden { display: none; }
+    .cocktail-name {
+        overflow-wrap: normal;
+        word-break: normal;
+        white-space: normal;
+    }
+    .qty-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #601203;
+        background: #f0e5d1;
+        color: #601203;
+        border-radius: 50%;
+        font-size: 1.1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s, color 0.2s;
+        padding: 0;
+        margin: 0;
+        flex-shrink: 0;
+    }
+    .qty-btn:hover {
+        background: #601203;
+        color: #f0e5d1;
+    }
+    .cocktail-qty {
+        width: 60px !important;
+        padding: 6px !important;
+        flex-shrink: 0;
+    }
+    @media (max-width: 700px) {
+        .form-grid.two, .form-grid.four { grid-template-columns: 1fr; }
+        .filter-bar { flex-wrap: wrap; }
+    }
+</style>
+
+<script>
+    const cocktailsData = JSON.parse(document.getElementById('cocktailsJson').value || '{}');
+
+    function filterCocktails() {
+        const category = document.getElementById('categoryFilter').value;
+        const term = document.getElementById('searchInput').value.toLowerCase().trim();
+        document.querySelectorAll('#cocktailGrid .cocktail-card').forEach(card => {
+            const name = card.dataset.name.toLowerCase();
+            const matchesCategory = category === 'all' || card.dataset.category === category;
+            const matchesSearch = !term || name.includes(term);
+            card.classList.toggle('hidden', !(matchesCategory && matchesSearch));
+        });
+    }
+
+    function sortCocktails() {
+        const grid = document.getElementById('cocktailGrid');
+        const cards = Array.from(grid.children);
+        const mode = document.getElementById('sortFilter').value;
+        cards.sort((a, b) => {
+            const na = a.dataset.name.trim();
+            const nb = b.dataset.name.trim();
+            return mode === 'name_desc' ? nb.localeCompare(na, 'ru') : na.localeCompare(nb, 'ru');
+        });
+        cards.forEach(card => grid.appendChild(card));
+    }
+
+    function updateCard(qty) {
+        const card = qty.closest('.cocktail-card');
+        const count = parseInt(qty.value) || 0;
+        if (count > 0) card.classList.add('selected');
+        else card.classList.remove('selected');
+    }
+
+    function changeQty(btn, delta) {
+        const qty = btn.parentElement.querySelector('.cocktail-qty');
+        let count = parseInt(qty.value) || 0;
+        count = Math.max(0, count + delta);
+        qty.value = count;
+        updateCard(qty);
+    }
+
+    // Заполняем количества из редактируемого события
+    if (Object.keys(cocktailsData).length) {
+        document.querySelectorAll('.cocktail-qty').forEach(qty => {
+            const name = qty.dataset.name;
+            if (cocktailsData[name]) {
+                qty.value = cocktailsData[name];
+                updateCard(qty);
+            }
+        });
+    }
+
+    document.getElementById('eventForm').addEventListener('submit', () => {
+        const selected = {};
+        document.querySelectorAll('.cocktail-qty').forEach(qty => {
+            const count = parseInt(qty.value) || 0;
+            if (count > 0) selected[qty.dataset.name] = count;
+        });
+        document.getElementById('cocktailsJson').value = JSON.stringify(selected);
+    });
+
+    sortCocktails();
+</script>
+{% endblock %}

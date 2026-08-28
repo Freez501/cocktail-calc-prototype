@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 from datetime import datetime
+from typing import Dict, List
 from urllib.parse import unquote_plus
 
 from fastapi import (
@@ -14,7 +15,7 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -24,6 +25,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from cocktail_calc.calculator import (
+    _find_pdf_font,
     calculate_shopping_list,
     format_report,
     generate_pdf_report,
@@ -31,6 +33,7 @@ from cocktail_calc.calculator import (
     parse_order,
 )
 from cocktail_calc.config import DATA_DIR, DB_FILE
+from cocktail_calc import events_repository
 from cocktail_calc.repository import load_database, load_default_prices
 
 app = FastAPI(title="CocktailCalc Pro")
@@ -502,5 +505,395 @@ async def admin_download_ttk(portions: int = 1, credentials=Depends(verify_admin
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ─── CRM мероприятий ─────────────────────────────────────────────────────────
+
+_BAR_LABELS = {
+    "white_columns": "Белый с колоннами",
+    "white_no_columns": "Белый без колонн",
+    "black": "Чёрный",
+    "none": "Нет",
+}
+
+_SHELF_LABELS = {
+    "black_white": "Чёрный с белыми полками",
+    "gold_black": "Золотой с чёрными полками",
+    "none": "Нет",
+}
+
+_PYRAMID_LABELS = {
+    "56": "56",
+    "84": "84",
+    "120": "120",
+    "none": "Нет",
+}
+
+_MENU_LABELS = {
+    "us": "С нас",
+    "client": "С заказчика",
+}
+
+_DECORATIONS_LIST = [
+    "базовые",
+    "клеймо",
+    "лёд с интеграцией",
+    "печать на съедобной бумаге",
+    "трафарет",
+    "азот",
+    "бластер",
+    "кондитерское украшение",
+    "шоко трансфер",
+    "принтер",
+]
+
+
+def _build_event_data(
+    title: str,
+    client: str,
+    bartenders_count: str,
+    date: str,
+    address: str,
+    departure: str,
+    setup: str,
+    start: str,
+    end: str,
+    manager_contact: str,
+    bar: str,
+    bar_comment: str,
+    shelf: str,
+    shelf_comment: str,
+    pyramid: str,
+    pyramid_comment: str,
+    decorations: List[str],
+    decorations_comment: str,
+    clothing: str,
+    menu: str,
+    comment: str,
+    cocktails_json: str,
+) -> Dict:
+    try:
+        bartenders = int(bartenders_count) if bartenders_count.strip() else 0
+    except ValueError:
+        bartenders = 0
+
+    try:
+        cocktails = json.loads(cocktails_json or "{}")
+        if not isinstance(cocktails, dict):
+            cocktails = {}
+    except json.JSONDecodeError:
+        cocktails = {}
+
+    return {
+        "title": title.strip(),
+        "client": client.strip(),
+        "bartenders_count": bartenders,
+        "date": date,
+        "address": address.strip(),
+        "timings": {
+            "departure": departure,
+            "setup": setup,
+            "start": start,
+            "end": end,
+        },
+        "manager_contact": manager_contact.strip(),
+        "bar": bar,
+        "bar_comment": bar_comment.strip(),
+        "shelf": shelf,
+        "shelf_comment": shelf_comment.strip(),
+        "pyramid": pyramid,
+        "pyramid_comment": pyramid_comment.strip(),
+        "decorations": decorations,
+        "decorations_comment": decorations_comment.strip(),
+        "clothing": clothing.strip(),
+        "menu": menu,
+        "comment": comment.strip(),
+        "cocktails": cocktails,
+    }
+
+
+def _generate_event_pdf(event: Dict) -> bytes:
+    from fpdf import FPDF
+
+    font_path = _find_pdf_font()
+    if not font_path:
+        raise RuntimeError("Не найден TTF-шрифт с поддержкой кириллицы для PDF")
+
+    font_dir = os.path.dirname(font_path)
+    bold_candidates = [
+        os.path.join(font_dir, "DejaVuSans-Bold.ttf"),
+        os.path.join(font_dir, "LiberationSans-Bold.ttf"),
+        os.path.join(font_dir, "arialbd.ttf"),
+        os.path.join(font_dir, "calibrib.ttf"),
+    ]
+    bold_path = font_path
+    for cand in bold_candidates:
+        if os.path.exists(cand):
+            bold_path = cand
+            break
+
+    class EventPDF(FPDF):
+        def header(self):
+            self.set_font("EventFont", "B", 14)
+            self.set_text_color(96, 18, 3)
+            self.cell(0, 10, event.get("title", "Мероприятие"), ln=True, align="C")
+            self.set_font("EventFont", "", 9)
+            self.set_text_color(110, 110, 115)
+            self.cell(0, 6, f"Дата: {event.get('date') or '—'}", ln=True, align="C")
+            self.ln(4)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("EventFont", "", 8)
+            self.set_text_color(110, 110, 115)
+            self.cell(0, 10, f"Стр. {self.page_no()}", align="C")
+
+    pdf = EventPDF()
+    pdf.add_font("EventFont", "", font_path, uni=True)
+    pdf.add_font("EventFont", "B", bold_path, uni=True)
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    def _row(label, value):
+        pdf.set_font("EventFont", "B", 10)
+        pdf.set_text_color(96, 18, 3)
+        pdf.cell(70, 7, label, ln=0)
+        pdf.set_font("EventFont", "", 10)
+        pdf.set_text_color(29, 29, 31)
+        pdf.multi_cell(0, 7, value or "—")
+
+    pdf.set_font("EventFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Основное", ln=True)
+    _row("Заказчик:", event.get("client", ""))
+    _row("Барменов:", str(event.get("bartenders_count", "")))
+    _row("Адрес:", event.get("address", ""))
+    _row("Контакт менеджера:", event.get("manager_contact", ""))
+    pdf.ln(4)
+
+    pdf.set_font("EventFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Тайминг", ln=True)
+    timings = event.get("timings", {})
+    _row("Выезд:", timings.get("departure", ""))
+    _row("Монтаж:", timings.get("setup", ""))
+    _row("Начало:", timings.get("start", ""))
+    _row("Финал:", timings.get("end", ""))
+    pdf.ln(4)
+
+    pdf.set_font("EventFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Оборудование", ln=True)
+    bar = event.get("bar", "none")
+    _row("Бар:", f"{_BAR_LABELS.get(bar, bar)}{', ' + event.get('bar_comment', '') if event.get('bar_comment') else ''}")
+    shelf = event.get("shelf", "none")
+    _row("Стеллаж:", f"{_SHELF_LABELS.get(shelf, shelf)}{', ' + event.get('shelf_comment', '') if event.get('shelf_comment') else ''}")
+    pyramid = event.get("pyramid", "none")
+    _row("Пирамида:", f"{_PYRAMID_LABELS.get(pyramid, pyramid)}{', ' + event.get('pyramid_comment', '') if event.get('pyramid_comment') else ''}")
+    pdf.ln(4)
+
+    pdf.set_font("EventFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Украшения", ln=True)
+    decorations = event.get("decorations", [])
+    if decorations:
+        pdf.set_font("EventFont", "", 10)
+        pdf.set_text_color(29, 29, 31)
+        for dec in decorations:
+            pdf.cell(0, 6, f"• {dec[:1].upper()}{dec[1:]}", ln=True)
+    else:
+        pdf.set_font("EventFont", "", 10)
+        pdf.cell(0, 6, "—", ln=True)
+    if event.get("decorations_comment"):
+        pdf.set_font("EventFont", "", 9)
+        pdf.set_text_color(110, 110, 115)
+        pdf.multi_cell(0, 6, event.get("decorations_comment", ""))
+    pdf.ln(4)
+
+    pdf.set_font("EventFont", "B", 11)
+    pdf.set_text_color(96, 18, 3)
+    pdf.cell(0, 8, "Дополнительно", ln=True)
+    _row("Форма одежды:", event.get("clothing", ""))
+    menu = event.get("menu", "us")
+    _row("Меню:", _MENU_LABELS.get(menu, menu))
+    _row("Комментарий:", event.get("comment", ""))
+    pdf.ln(4)
+
+    cocktails = event.get("cocktails", {})
+    if cocktails:
+        pdf.set_font("EventFont", "B", 11)
+        pdf.set_text_color(96, 18, 3)
+        pdf.cell(0, 8, "Коктейли", ln=True)
+        total = 0
+        for name, qty in sorted(cocktails.items()):
+            pdf.set_font("EventFont", "", 10)
+            pdf.set_text_color(29, 29, 31)
+            pdf.cell(90, 6, name, ln=0)
+            pdf.cell(0, 6, f"{qty} шт.", ln=True)
+            total += int(qty)
+        pdf.set_font("EventFont", "B", 10)
+        pdf.set_text_color(96, 18, 3)
+        pdf.cell(90, 7, "Итого:", ln=0)
+        pdf.cell(0, 7, f"{total} шт.", ln=True)
+
+    pdf_bytes = pdf.output(dest="S")
+    return bytes(pdf_bytes) if isinstance(pdf_bytes, bytearray) else pdf_bytes
+
+
+@app.get("/events", response_class=HTMLResponse)
+async def events_list(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="events/list.html",
+        context={"events": events_repository.list_events()},
+    )
+
+
+@app.get("/events/new", response_class=HTMLResponse)
+async def events_new_form(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="events/form.html",
+        context={
+            "event": None,
+            "cocktails_json": "{}",
+            "cocktails": db.cocktails,
+            "cocktail_categories": db.cocktail_categories,
+            "decorations_list": _DECORATIONS_LIST,
+        },
+    )
+
+
+@app.post("/events/new", response_class=RedirectResponse)
+async def events_create(
+    title: str = Form(...),
+    client: str = Form(default=""),
+    bartenders_count: str = Form(default="1"),
+    date: str = Form(default=""),
+    address: str = Form(default=""),
+    departure: str = Form(default=""),
+    setup: str = Form(default=""),
+    start: str = Form(default=""),
+    end: str = Form(default=""),
+    manager_contact: str = Form(default=""),
+    bar: str = Form(default="none"),
+    bar_comment: str = Form(default=""),
+    shelf: str = Form(default="none"),
+    shelf_comment: str = Form(default=""),
+    pyramid: str = Form(default="none"),
+    pyramid_comment: str = Form(default=""),
+    decorations: List[str] = Form(default=[]),
+    decorations_comment: str = Form(default=""),
+    clothing: str = Form(default=""),
+    menu: str = Form(default="us"),
+    comment: str = Form(default=""),
+    cocktails_json: str = Form(default="{}"),
+):
+    data = _build_event_data(
+        title, client, bartenders_count, date, address,
+        departure, setup, start, end, manager_contact,
+        bar, bar_comment, shelf, shelf_comment, pyramid, pyramid_comment,
+        decorations, decorations_comment, clothing, menu, comment, cocktails_json,
+    )
+    event_id = events_repository.create_event(data)
+    return RedirectResponse(url=f"/events/{event_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get("/events/{event_id}", response_class=HTMLResponse)
+async def events_detail(request: Request, event_id: str):
+    event = events_repository.get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    total_cocktails = sum(int(q) for q in event.get("cocktails", {}).values())
+    return templates.TemplateResponse(
+        request=request,
+        name="events/detail.html",
+        context={
+            "event": event,
+            "bar_label": _BAR_LABELS.get(event.get("bar", "none"), event.get("bar", "—")),
+            "shelf_label": _SHELF_LABELS.get(event.get("shelf", "none"), event.get("shelf", "—")),
+            "pyramid_label": _PYRAMID_LABELS.get(event.get("pyramid", "none"), event.get("pyramid", "—")),
+            "menu_label": _MENU_LABELS.get(event.get("menu", "us"), event.get("menu", "—")),
+            "total_cocktails": total_cocktails,
+        },
+    )
+
+
+@app.get("/events/{event_id}/edit", response_class=HTMLResponse)
+async def events_edit_form(request: Request, event_id: str):
+    event = events_repository.get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    return templates.TemplateResponse(
+        request=request,
+        name="events/form.html",
+        context={
+            "event": event,
+            "cocktails_json": json.dumps(event.get("cocktails", {}), ensure_ascii=False),
+            "cocktails": db.cocktails,
+            "cocktail_categories": db.cocktail_categories,
+            "decorations_list": _DECORATIONS_LIST,
+        },
+    )
+
+
+@app.post("/events/{event_id}/edit", response_class=RedirectResponse)
+async def events_update(
+    event_id: str,
+    title: str = Form(...),
+    client: str = Form(default=""),
+    bartenders_count: str = Form(default="1"),
+    date: str = Form(default=""),
+    address: str = Form(default=""),
+    departure: str = Form(default=""),
+    setup: str = Form(default=""),
+    start: str = Form(default=""),
+    end: str = Form(default=""),
+    manager_contact: str = Form(default=""),
+    bar: str = Form(default="none"),
+    bar_comment: str = Form(default=""),
+    shelf: str = Form(default="none"),
+    shelf_comment: str = Form(default=""),
+    pyramid: str = Form(default="none"),
+    pyramid_comment: str = Form(default=""),
+    decorations: List[str] = Form(default=[]),
+    decorations_comment: str = Form(default=""),
+    clothing: str = Form(default=""),
+    menu: str = Form(default="us"),
+    comment: str = Form(default=""),
+    cocktails_json: str = Form(default="{}"),
+):
+    data = _build_event_data(
+        title, client, bartenders_count, date, address,
+        departure, setup, start, end, manager_contact,
+        bar, bar_comment, shelf, shelf_comment, pyramid, pyramid_comment,
+        decorations, decorations_comment, clothing, menu, comment, cocktails_json,
+    )
+    ok = events_repository.update_event(event_id, data)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    return RedirectResponse(url=f"/events/{event_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/events/{event_id}/delete", response_class=RedirectResponse)
+async def events_delete(event_id: str):
+    ok = events_repository.delete_event(event_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    return RedirectResponse(url="/events", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get("/events/{event_id}/pdf")
+async def events_pdf(event_id: str):
+    event = events_repository.get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    pdf_bytes = _generate_event_pdf(event)
+    filename = f"event_{event.get('title', event_id)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
